@@ -195,8 +195,12 @@ class ObjectMap:
 
         # Identify objects in map inside current point cloud's frustrum
         other_min, other_max = compute_bounds(other.pcd_tensors)
-        main_in_other = ((self.vertices_tensor >= other_min) & (self.vertices_tensor <= other_max))
-        objs_in_frustrum = main_in_other.all(dim=2).any(1).nonzero(as_tuple=False).squeeze(1)
+        main_in_other = (self.vertices_tensor >= other_min) & (
+            self.vertices_tensor <= other_max
+        )
+        objs_in_frustrum = (
+            main_in_other.all(dim=2).any(1).nonzero(as_tuple=False).squeeze(1)
+        )
 
         # If there is no match, return empty lists
         if len(objs_in_frustrum) == 0:
@@ -332,7 +336,7 @@ class ObjectMap:
             plt.close()
 
     def save(self, path: str) -> None:
-        import pickle
+        import dill as pickle
 
         for obj in self:
             obj.pcd_to_np()
