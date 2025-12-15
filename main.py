@@ -109,6 +109,9 @@ def main(cfg: DictConfig):
     # Also export some data to standard files
     main_map.export(output_dir_map)
 
+    # Also save pickle of the map
+    main_map.save(output_dir_map / "map.pkl")
+
     # Hydra config
     OmegaConf.save(cfg, output_dir_map / "config.yaml")
 
