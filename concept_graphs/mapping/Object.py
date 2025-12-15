@@ -37,6 +37,7 @@ class Object:
         self.vertices = None
         self.centroid = None
         self.semantic_ft = None
+        self.estimator = None
         self.segments = SegmentHeap(max_size=segment_heap_size)
         self.n_segments = 1
         self.caption = "empty"
@@ -116,7 +117,9 @@ class Object:
         elif self.semantic_mode == "multi":
             if len(ft) < self.segment_heap_size:
                 multiply = self.segment_heap_size // len(ft) + 1
-                self.semantic_ft = np.concatenate([ft] * multiply, axis=0)[: self.segment_heap_size]
+                self.semantic_ft = np.concatenate([ft] * multiply, axis=0)[
+                    : self.segment_heap_size
+                ]
             else:
                 self.semantic_ft = ft
 
