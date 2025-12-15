@@ -25,6 +25,8 @@ class QueryObjects(BaseMapEngine):
         verifier: OpenAIVerifier,
         receptacles_bbox: Dict,
         pickupable_to_receptacles: Dict,
+        pickupable_bbox: Dict,
+        pickupable_existence: Dict,
         top_k: int = 5,
         **kwargs,
     ):
@@ -35,6 +37,10 @@ class QueryObjects(BaseMapEngine):
         self.top_k = top_k
         self.receptacle_map_ids = self.get_receptacle_map_ids()
         self.gt_receptacles_aabb = self.compute_receptacles_aabb()
+
+        # Only used in GT Class, but defined here so things don't break
+        self.pickupable_bbox = pickupable_bbox
+        self.pickupable_existence = pickupable_existence
 
     def compute_receptacles_aabb(self):
         result = dict()
@@ -91,8 +97,8 @@ class QueryObjects(BaseMapEngine):
         b_max = np.max(corners, axis=0)
 
         d_vars = np.maximum(0, b_min - point) + np.maximum(0, point - b_max)
-        
-        dist_sq = np.sum(d_vars ** 2)
+
+        dist_sq = np.sum(d_vars**2)
 
         return np.sqrt(dist_sq)
 
@@ -109,7 +115,9 @@ class QueryObjects(BaseMapEngine):
         map_point = np.array(object_centroid)
 
         closest_rec = None
-        min_dist_sq = 1.0     # Pickupable has to be at least a meter away from the receptacle
+        min_dist_sq = (
+            1.0  # Pickupable has to be at least a meter away from the receptacle
+        )
 
         for rec_name, rec_data in receptacles.items():
             corners = np.asarray(rec_data.get_box_points(), dtype=np.float32)
@@ -240,6 +248,7 @@ class QueryObjects(BaseMapEngine):
     def save_results(self, results, output_path, sssd_data: object):
         """Save results using SSSD class."""
         import polars as pl
+
         # TODO: @miguel: Ask charlie how to save this using her thing.
         timestamps = np.concatenate(
             [data._timestamp for data in sssd_data.get_generator_of_selves()]
@@ -299,23 +308,26 @@ class QueryObjects(BaseMapEngine):
             os.remove(pq_path)
 
         # Create dummy data for non-used keys
-        data = pl.DataFrame({
-            "timestamp": timestamps,
-            "assignment": assignments
-        })
+        data = pl.DataFrame({"timestamp": timestamps, "assignment": assignments})
         # Memory efficient way to add empty columns
-        data = data.with_columns([
-            pl.lit(None, dtype=pl.List(pl.Float64)).alias("position"),
-            pl.lit(None, dtype=pl.List(pl.Float64)).alias("rotation"),
-            pl.lit(None, dtype=pl.List(pl.Float64)).alias("aabb_center"),
-            pl.lit(None, dtype=pl.List(pl.Float64)).alias("aabb_size"),
-            pl.lit(None, dtype=pl.List(pl.List(pl.Float64))).alias("aabb_cornerPoints"),
-            pl.lit(None, dtype=pl.List(pl.List(pl.Float64))).alias("oobb_cornerPoints"),
-        ])
+        data = data.with_columns(
+            [
+                pl.lit(None, dtype=pl.List(pl.Float64)).alias("position"),
+                pl.lit(None, dtype=pl.List(pl.Float64)).alias("rotation"),
+                pl.lit(None, dtype=pl.List(pl.Float64)).alias("aabb_center"),
+                pl.lit(None, dtype=pl.List(pl.Float64)).alias("aabb_size"),
+                pl.lit(None, dtype=pl.List(pl.List(pl.Float64))).alias(
+                    "aabb_cornerPoints"
+                ),
+                pl.lit(None, dtype=pl.List(pl.List(pl.Float64))).alias(
+                    "oobb_cornerPoints"
+                ),
+            ]
+        )
         data.write_parquet(output_path / "scan_0.parquet")
 
         # Save receptacles map ids
-        with open(output_path  / "receptacle_map_ids.json", "w") as f:
+        with open(output_path / "receptacle_map_ids.json", "w") as f:
             json.dump(self.receptacle_map_ids, f, indent=4)
 
         # Save pickupable map ids
@@ -323,11 +335,11 @@ class QueryObjects(BaseMapEngine):
         for p_name, res_data in results.items():
             if res_data["present"]:
                 pickupable_map_ids[p_name] = res_data["map_object_id"]
-        with open(output_path  / "pickupable_map_ids.json", "w") as f:
+        with open(output_path / "pickupable_map_ids.json", "w") as f:
             json.dump(pickupable_map_ids, f, indent=4)
 
         # Save results in original format in case we want to plot
-        with open(output_path  / "query_results.json", "w") as f:
+        with open(output_path / "query_results.json", "w") as f:
             json.dump(results, f, indent=4)
 
     def visualize(self, res_path: str):
@@ -397,6 +409,185 @@ class QueryObjects(BaseMapEngine):
                 p_id = data["map_object_id"]
                 bbox = self.bbox[p_id]
                 bbox.color = [1, 0, 0]
+
+                # Add Geometry
+                vis.add_geometry(f"pickup_{p_id}", bbox)
+
+                # Add Label
+                vis.add_3d_label(bbox.get_center(), f" {p_name} ")
+
+        # 6. Run Visualization
+        vis.reset_camera_to_default()
+        app.add_window(vis)
+        app.run()
+
+
+class QueryObjectsGT(QueryObjects):
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        self.pickupable_map_ids = self.get_pickupable_map_ids()
+
+    def get_pickupable_map_ids(self) -> Dict[str, int]:
+        """
+        For each pickupable OOBB (given as 8 corner points), find the map
+        object id whose bounding box has the highest IoU with it.
+        """
+
+        pickupable_to_map: Dict[str, int] = {}
+
+        for p_key, p_data in self.pickupable_bbox.items():
+
+            if (
+                self.pickupable_existence[p_key] == False
+            ) or p_key == "OOB_FAKE_RECEPTACLE":
+                pickupable_to_map[p_key] = None
+                continue
+
+            corner_points = p_data["cornerPoints"]
+
+            # corner_points is already a list of 8 [x, y, z] points
+            rec_corners = np.array(corner_points, dtype=np.float32)
+
+            best_iou = 0.0
+            best_idx: Optional[int] = None
+
+            # Iterate over all map bboxes
+            for idx, bbox in enumerate(self.bbox):
+                # bbox is expected to be an Open3D OrientedBoundingBox
+                box_points = np.asarray(bbox.get_box_points(), dtype=np.float32)
+                iou = aabb_iou(rec_corners, box_points)
+                if iou > best_iou:
+                    best_iou = iou
+                    best_idx = idx
+
+            pickupable_to_map[p_key] = best_idx
+
+        return pickupable_to_map
+
+    def process_queries(self, queries: List[str]) -> Dict:
+        """
+        GT-based query processing.
+        Skips retrieval and verification and directly uses ground-truth
+        pickupable to map-object association.
+        """
+
+        results: Dict[str, Dict] = {}
+
+        for query_text in queries:
+            result_entry = {
+                "present": False,
+                "map_object_id": None,
+                "query_timestamp": [],
+                "present_receptacle_name": None,
+                "receptacles": [],
+            }
+
+            # 1. Build receptacles list (same as base class)
+            receptacle_names = self.pickupable_to_receptacles.get(query_text, [])
+
+            for rec_name in receptacle_names:
+                if rec_name == "OOB_FAKE_RECEPTACLE":
+                    continue
+
+                rec_map_id = self.receptacle_map_ids.get(rec_name)
+
+                if rec_map_id is None:
+                    result_entry["receptacles"].append(
+                        {
+                            "receptacle_name": rec_name,
+                            "map_object_id": None,
+                            "receptacle_timestamps": [],
+                        }
+                    )
+                    continue
+
+                result_entry["receptacles"].append(
+                    {
+                        "receptacle_name": rec_name,
+                        "map_object_id": rec_map_id,
+                        "receptacle_timestamps": self.annotations[rec_map_id].get(
+                            "timestamps", []
+                        ),
+                    }
+                )
+
+            # 2. GT pickupable existence check
+            exists = self.pickupable_existence.get(query_text, False)
+            map_id = self.pickupable_map_ids.get(query_text)
+
+            if not exists or map_id is None:
+                # Object is not present — still return receptacle candidates
+                results[query_text] = result_entry
+                continue
+
+            # 3. Fill in GT object info
+            obj_data = self.annotations[map_id]
+            centroid = obj_data["centroid"]
+
+            present_receptacle = self.find_receptacle(
+                centroid, self.gt_receptacles_aabb
+            )
+
+            result_entry["present"] = True
+            result_entry["map_object_id"] = map_id
+            result_entry["query_timestamp"] = obj_data.get("timestamps", [])
+            result_entry["present_receptacle_name"] = present_receptacle
+
+            results[query_text] = result_entry
+
+        return results
+
+    def visualize(self, res_path: str):
+        """Visualize all object point clouds with labels using O3DVisualizer."""
+        import open3d.visualization.gui as gui
+
+        # 1. Initialize Application and Visualizer
+        app = gui.Application.instance
+        app.initialize()
+
+        vis = o3d.visualization.O3DVisualizer("Map Objects Visualization", 1024, 768)
+        vis.set_background([1.0, 1.0, 1.0, 1.0], bg_image=None)
+        vis.show_settings = True
+        vis.show_skybox(False)
+        vis.enable_raw_mode(True)
+
+        # 2. Add Point Clouds
+        for i, pcd in enumerate(self.pcd):
+            vis.add_geometry(f"pcd_{i}", pcd)
+
+        # 3. Load Results
+        with open(res_path / "query_results.json", "r") as f:
+            results = json.load(f)
+
+        # 3. Add Receptacles (From ground truth)
+        for p_name, p_data in self.pickupable_bbox.items():
+
+            # A. Extract the corners and convert to numpy array
+            corners = np.array(p_data["cornerPoints"], dtype=np.float64)
+
+            # create_from_points computes the tightest box around these 8 points
+            bbox = o3d.geometry.OrientedBoundingBox.create_from_points(
+                o3d.utility.Vector3dVector(corners)
+            )
+
+            bbox.color = [0, 1, 0]
+
+            if self.pickupable_existence[p_name] == False:
+                bbox.color = [1, 0, 0]
+
+            vis.add_geometry(f"gt_pickupable_{p_name}", bbox)
+            vis.add_3d_label(bbox.get_center(), f" {p_name} ")
+
+        # 4. Add Pickupables (with Labels)
+        for p_name, data in results.items():
+            if data["present"]:
+                p_id = data["map_object_id"]
+                bbox = self.bbox[p_id]
+                bbox.color = [0, 0, 1]
 
                 # Add Geometry
                 vis.add_geometry(f"pickup_{p_id}", bbox)

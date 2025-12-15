@@ -21,9 +21,16 @@ def main(cfg: DictConfig):
     if cfg.name == "verifier":
         queries = dataset.get_pickupable_names()
         p2r_map = dataset.get_pickupable_to_receptacles()
+        pickupable_existence = None
     elif cfg.name == "map_receptacles":
         queries = dataset.get_receptacles_names()
         p2r_map = None
+        pickupable_existence = None
+    elif cfg.name == "verifier_gt":
+        queries = dataset.get_pickupable_names()
+        pickupable_existence = dataset.get_assignment()
+        print(pickupable_existence)
+        p2r_map = dataset.get_pickupable_to_receptacles()
 
     map_path = cfg.map_path
 
@@ -34,6 +41,8 @@ def main(cfg: DictConfig):
         semantic_sim_metric=semantic_sim,
         verifier=verifier,
         receptacles_bbox=dataset.get_receptacles_bbox(),
+        pickupable_bbox=dataset.get_pickupables_bbox(),
+        pickupable_existence=pickupable_existence,
         pickupable_to_receptacles=p2r_map,
     )
 
@@ -47,7 +56,6 @@ def main(cfg: DictConfig):
     if cfg.debug:
         log.info("Visualizing map objects...")
         engine.visualize(output_path)
-        
 
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 defaults:
-  - algo: VerifyObjects
+  - algo: VerifyObjectsGT
   - dataset: SemiStaticSim
   - paths: paths
   - _self_
 
-map_path: ${output_dir}/semistaticsim_run_0_cg-detector_2025-11-24-12-09-26.769846
+map_path: ${output_dir}/latest_map
 device: cuda
-debug: false
+debug: true

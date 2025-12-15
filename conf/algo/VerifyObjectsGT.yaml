@@ -1,0 +1,17 @@
+# @package _global_
+defaults:
+  - /ft_extraction: CLIP_H14
+  - /vlm@vlm_verifier: OpenAIVerifier
+  - /inference: QueryObjectsGT
+  - _self_
+
+name: "verifier_gt"
+top_k: 3
+
+semantic_similarity:
+  _target_: concept_graphs.mapping.similarity.semantic.CosineSimilarity01
+
+vlm_verifier:
+  max_images: 5
+  retry_attempts: 3
+  verify_mode: single # Options: majority_vote, unanimous, single

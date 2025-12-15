@@ -1,4 +1,4 @@
-_target_: concept_graphs.inference.MapQueryEngine.QueryObjects
+_target_: concept_graphs.inference.MapQueryEngine.QueryObjectsGT
 map_path: ${map_path}
 ft_extractor: ???
 semantic_sim_metric: ???
