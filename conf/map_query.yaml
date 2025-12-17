@@ -5,5 +5,7 @@ defaults:
   - _self_
 
 map_path: ${output_dir}/latest_map
+perpetua_estimators_path: ${data_dir}/perpetua_estimators
+perpetua_map_path: ${data_dir}/perpetua_map
 device: cuda
 debug: true

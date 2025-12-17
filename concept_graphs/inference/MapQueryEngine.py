@@ -3,7 +3,7 @@ import shutil
 import os
 import glob
 from natsort import natsorted
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import numpy as np
 import json
 
@@ -35,12 +35,14 @@ class QueryObjects(BaseMapEngine):
         self.receptacles_bbox = receptacles_bbox
         self.pickupable_to_receptacles = pickupable_to_receptacles
         self.top_k = top_k
-        self.receptacle_map_ids = self.get_receptacle_map_ids()
-        self.gt_receptacles_aabb = self.compute_receptacles_aabb()
 
         # Only used in GT Class, but defined here so things don't break
         self.pickupable_bbox = pickupable_bbox
         self.pickupable_existence = pickupable_existence
+        self.pickupable_map_ids = {}
+
+        self.receptacle_map_ids = self.get_receptacle_map_ids()
+        self.gt_receptacles_aabb = self.compute_receptacles_aabb()
 
     def compute_receptacles_aabb(self):
         result = dict()
@@ -150,6 +152,7 @@ class QueryObjects(BaseMapEngine):
         }
         """
         results: Dict[str, Dict] = {}
+        pickupable_to_map: Dict[str, int] = {}
 
         log.info("Encoding queries...")
         # Encode queries -> (num_queries, feature_dim)
@@ -229,6 +232,12 @@ class QueryObjects(BaseMapEngine):
                 )
                 is_match = self.verifier(images, query_text_cleaned)
 
+                if is_match and idx in self.receptacle_map_ids.values():
+                    log.warning(
+                        f"Verified object ID {idx} for query '{query_text}' is actually a receptacle. Skipping."
+                    )
+                    is_match = False
+
                 if is_match:
                     # 4. Spatial Association: which receptacle does it belong to now?
                     # NOTE from @kumaradityag: It is possible that the rec_name is not the correct receptacle, if the incorrect object was retrieved
@@ -239,10 +248,13 @@ class QueryObjects(BaseMapEngine):
                     result_entry["map_object_id"] = idx
                     result_entry["query_timestamp"] = obj_data.get("timestamps", [])
                     result_entry["present_receptacle_name"] = rec_name
+
+                    pickupable_to_map[query_text] = idx
                     break
 
             results[query_text] = result_entry
 
+        self.pickupable_map_ids = pickupable_to_map
         return results
 
     def save_results(self, results, output_path, sssd_data: object):
@@ -421,6 +433,9 @@ class QueryObjects(BaseMapEngine):
         app.add_window(vis)
         app.run()
 
+    def get_map_object_ids(self) -> Tuple[Dict[str, int], Dict[str, int]]:
+        return self.pickupable_map_ids, self.receptacle_map_ids
+
 
 class QueryObjectsGT(QueryObjects):
     def __init__(
@@ -441,9 +456,7 @@ class QueryObjectsGT(QueryObjects):
 
         for p_key, p_data in self.pickupable_bbox.items():
 
-            if (
-                self.pickupable_existence[p_key] == False
-            ) or p_key == "OOB_FAKE_RECEPTACLE":
+            if self.pickupable_existence[p_key] == False:
                 pickupable_to_map[p_key] = None
                 continue
 
@@ -464,7 +477,13 @@ class QueryObjectsGT(QueryObjects):
                     best_iou = iou
                     best_idx = idx
 
-            pickupable_to_map[p_key] = best_idx
+            if best_idx in self.receptacle_map_ids.values():
+                log.warning(
+                    f"Pickupable '{p_key}' with best map ID {best_idx} actually maps to a receptacle. Skipping."
+                )
+                pickupable_to_map[p_key] = None
+            else:
+                pickupable_to_map[p_key] = best_idx
 
         return pickupable_to_map
 

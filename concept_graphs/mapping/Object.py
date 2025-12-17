@@ -37,7 +37,6 @@ class Object:
         self.vertices = None
         self.centroid = None
         self.semantic_ft = None
-        self.estimator = None
         self.segments = SegmentHeap(max_size=segment_heap_size)
         self.n_segments = 1
         self.caption = "empty"
@@ -72,6 +71,8 @@ class Object:
         self.is_collated = True
 
         self.id = uuid.uuid4()
+
+        # TODO: Implement additional attributes as needed
 
     @property
     def labels(self):
