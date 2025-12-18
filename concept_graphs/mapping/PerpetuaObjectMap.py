@@ -119,7 +119,7 @@ class PerpetuaObjectMap:
         attached = {}
         for receptacle_name, pickupables in edges.items():
             for pickupable_name in pickupables:
-                if pickupable_name in self._pickupables:
+                if pickupable_name in self._pickupables and receptacle_name in self._receptacles:
                     attached[pickupable_name] = receptacle_name
         self.edges = edges
 
@@ -134,8 +134,8 @@ class PerpetuaObjectMap:
         self._refresh_geometry_cache()
 
     def predict(self, timestep: float, threshold: float = 0.5):
-        if isinstance(timestep, float):
-            timestep = jnp.array([timestep])
+        if isinstance(timestep, float) or isinstance(timestep, int):
+            timestep = jnp.array([timestep], dtype=jnp.float32)
 
         # Predict edges based on current estimators
         inferred_edges: Dict[str, List[str]] = defaultdict(list)

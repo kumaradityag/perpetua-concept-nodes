@@ -245,5 +245,6 @@ class BaseMapEngine:
             perpetua_map.set_edges(initial_edges, move_pickupables=True)
             perpetua_map.refresh_state()
 
+        # TODO: Fix the path to be in cn_output
         perpetua_map.save(self.perpetua_map_path)
         return perpetua_map

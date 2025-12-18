@@ -55,6 +55,9 @@ class ViserServer:
         self.semantic_tensor = torch.from_numpy(clip_ft).to(device)
         self.semantic_sim = CosineSimilarity01()
 
+        # Containers
+        self.query_time = None
+
         # GUI
         with self.server.gui.add_folder("Point Cloud"):
             self.pcd_rgb_gui_button = self.server.gui.add_button(
@@ -108,6 +111,16 @@ class ViserServer:
             )
             self.clip_gui_button.on_click(self.on_clip_query_submit)
 
+        with self.server.gui.add_folder("Temporal Query"):
+            self.time_gui_number = self.server.gui.add_number(
+                "Time (hours)", initial_value=0, min=0
+            )
+            self.time_gui_button = self.server.gui.add_button(
+                "Predict at Time",
+                icon=viser.Icon.MOUSE,
+            )
+            self.time_gui_button.on_click(self.on_time_query_submit)
+
     def start(self):
         rng = np.random.default_rng(42)
         self.segmentation_colors = rng.random((len(self.objects), 3))
@@ -152,10 +165,24 @@ class ViserServer:
         for handle in self.object_handles:
             handle.point_size = point_size
 
+    def on_time_query_submit(self, data):
+        self.query_time = self.time_gui_number.value
+
     # scene manipulation
     def reset(self):
         self.server.scene.reset()
         self.display_object_rgb()
+
+    def load_object_map(self, object_map: PerpetuaObjectMap):
+        self.objects = [obj.pcd for obj in object_map]
+        self.labels = [f"{i}" for i in range(len(self.objects))]
+        self.bbox: List[o3d.geometry.OrientedBoundingBox] = [
+            pcd.get_oriented_bounding_box() for pcd in self.objects
+        ]
+        self.centroid = [np.mean(np.asarray(p.points), axis=0) for p in self.objects]
+        self.semantic_tensor = object_map.semantic_tensor.to(self.semantic_tensor.device)
+        self.imgs = [obj.segments[0].rgb for obj in object_map]
+        self.reset()
 
     def clear_main_objects(self):
         for name in self.object_names:
@@ -332,7 +359,7 @@ def main(cfg: DictConfig):
         perpetua_map: PerpetuaObjectMap = PerpetuaObjectMap.load(path)
         clip_ft = perpetua_map.semantic_tensor.numpy()
         pcd_o3d = [obj.pcd for obj in perpetua_map]
-        imgs = None
+        imgs = [obj.segments[0].rgb for obj in perpetua_map]
 
     ft_extractor = (
         hydra.utils.instantiate(cfg.ft_extraction)
@@ -347,7 +374,12 @@ def main(cfg: DictConfig):
     )
     viser_server.start()
     while True:
-        pass
+        if viser_server.query_time is not None and cfg.map_type == "perpetua":
+            print(f"The old edges were: \n {perpetua_map.edges}")
+            perpetua_map.predict(viser_server.query_time)
+            print(f"The new edges are: \n {perpetua_map.edges}")
+            viser_server.query_time = None
+            viser_server.load_object_map(perpetua_map)
 
 
 if __name__ == "__main__":
