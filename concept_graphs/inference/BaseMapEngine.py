@@ -99,8 +99,8 @@ class BaseMapEngine:
         try:
             with open(est_path, "rb") as f:
                 return pickle.load(f)
-        except FileNotFoundError:
-            log.warning(f"Estimator not found for {pickupable_name} at {est_path}")
+        except Exception as e:
+            log.error(f"Error loading estimator for {pickupable_name}: {e}")
             return None
 
     def _build_edges(
