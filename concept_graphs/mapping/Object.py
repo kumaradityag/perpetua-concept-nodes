@@ -1,13 +1,14 @@
-from typing import Union, Self
+from typing import Union, Self, List, Optional
 from enum import Enum
 import numpy as np
+import jax.numpy as jnp
 import open3d as o3d
 from .Segment import Segment
 from .SegmentHeap import SegmentHeap
 from .pcd_callbacks.PointCloudCallback import PointCloudCallback
 from perpetua2.utils.filter_state import Object as Estimator
+from perpetua2.filters.BayesianPerpetua import object_predict
 import uuid
-
 
 class ObjectType(Enum):
     RECEPTACLE = "Receptacle"
@@ -92,8 +93,21 @@ class Object:
     def labels(self):
         return [s.label for s in self.segments]
 
+    @property
+    def receptacles(self):
+        return self.estimator.receptacle_names
+
     def __repr__(self):
         return f"Object with {len(self.segments)} segments. Detected a total of {self.n_segments} times."
+
+    def update(self):
+        raise NotImplementedError
+    
+    def predict(self, t: Union[float, jnp.array], receptacle_names: Optional[List[str]] = None) -> np.ndarray:
+        if isinstance(t, float):
+            t = jnp.array([t])
+        out = object_predict(self.estimator, t, receptacle_names=receptacle_names)
+        return out
 
     def update_geometry(self):
         """Pull segment point clouds into one object-level point cloud"""

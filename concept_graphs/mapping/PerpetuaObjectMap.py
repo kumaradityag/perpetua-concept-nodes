@@ -2,14 +2,18 @@ import copy
 from collections import defaultdict
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Self
 
 import dill as pickle
 import numpy as np
 import torch
+import jax.numpy as jnp
 
 from .Object import Object, ObjectType
 from perpetua2.utils.filter_state import Object as Estimator
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class MapState(Enum):
@@ -129,18 +133,24 @@ class PerpetuaObjectMap:
 
         self._refresh_geometry_cache()
 
-    def update(self, timestep: float):
-        # TODO: This is a dummy function implementation. Replace with actual logic.
+    def predict(self, timestep: float, threshold: float = 0.5):
+        if isinstance(timestep, float):
+            timestep = jnp.array([timestep])
+
+        # Predict edges based on current estimators
         inferred_edges: Dict[str, List[str]] = defaultdict(list)
 
         for name, pickupable in self._pickupables.items():
             if pickupable.estimator is None:
-                continue
-            receptacle_name = pickupable.estimator.predict(timestep)
+                raise ValueError(f"Pickupable {name} does not have an associated estimator.")
+            belief = pickupable.predict(timestep)
+            index = jnp.argmax(belief).item()
+            receptacle_name = pickupable.receptacles[index] if belief[index] >= threshold else None
             if receptacle_name is None or receptacle_name not in self._receptacles:
                 continue
             inferred_edges[receptacle_name].append(name)
 
+        # FIXME: if predicting, this needs to be a temporal change, not an absolute set
         self.set_edges(inferred_edges)
         self.time = timestep
 
@@ -159,6 +169,7 @@ class PerpetuaObjectMap:
             rec.canonical_pos_vectors = [self._default_canonical_vector(rec)]
 
     def save(self, map_dir: Path):
+        log.info(f"Saving PerpetuaObjectMap to {map_dir}")
         map_dir = Path(map_dir)
         map_dir.mkdir(parents=True, exist_ok=True)
         map_file = map_dir / "perpetua_map.pkl"
@@ -173,7 +184,8 @@ class PerpetuaObjectMap:
             obj.pcd_to_o3d()
 
     @classmethod
-    def load(cls, path: Path) -> "PerpetuaObjectMap":
+    def load(cls, path: Path) -> Self:
+        log.info(f"Loading PerpetuaObjectMap from {path}")
         map_file = path / "perpetua_map.pkl"
         with open(map_file, "rb") as f:
             loaded_map: "PerpetuaObjectMap" = pickle.load(f)
