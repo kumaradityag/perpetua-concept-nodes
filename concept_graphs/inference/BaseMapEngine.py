@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Tuple
 from natsort import natsorted
 import glob
 
@@ -46,6 +46,10 @@ class BaseMapEngine:
         self.pcd = self._load_point_clouds()
         self.bbox = [pcd.get_oriented_bounding_box() for pcd in self.pcd]
         self.device = device
+
+        # Containers
+        self.pickupable_map_ids: Dict[str, int] = {}
+        self.receptacle_map_ids: Dict[str, int] = {}
 
         log.info(
             f"Map loaded from {self.map_path}. Found {len(self.annotations)} objects."
@@ -92,6 +96,21 @@ class BaseMapEngine:
         """Save results to a JSON file."""
         with open(output_path, "w") as f:
             json.dump(results, f, indent=4)
+
+    def get_map_object_ids(self) -> Tuple[Dict[str, int], Dict[str, int]]:
+        return self.pickupable_map_ids, self.receptacle_map_ids
+
+    def parse_assignments(
+        self, assignments: Dict, pickupable_names: List[str]
+    ) -> Dict[str, Optional[str]]:
+        return {
+            name: (
+                assignments[name].get("present_receptacle_name")
+                if assignments.get(name, {}).get("present")
+                else None
+            )
+            for name in pickupable_names
+        }
 
     def _load_estimator(self, pickupable_name: str):
         "Load the Perpetua estimator for a given pickupable object."
@@ -221,7 +240,6 @@ class BaseMapEngine:
                 )
 
             # TODO: Add background objects to the perpetua map
-
             perpetua_map.update_canonical_vectors(canonical_vectors)
             initial_edges = self._build_edges(current_p2r_mapping, perpetua_map)
             perpetua_map.set_edges(initial_edges, move_pickupables=True)

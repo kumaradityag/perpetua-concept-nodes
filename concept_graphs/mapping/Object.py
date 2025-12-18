@@ -1,10 +1,11 @@
-from typing import Union
+from typing import Union, Self
 from enum import Enum
 import numpy as np
 import open3d as o3d
 from .Segment import Segment
 from .SegmentHeap import SegmentHeap
 from .pcd_callbacks.PointCloudCallback import PointCloudCallback
+from perpetua2.utils.filter_state import Object as Estimator
 import uuid
 
 
@@ -82,7 +83,7 @@ class Object:
         # Perpetua attributes
         self.name = None
         self.obj_type = ObjectType.BACKGROUND
-        self.estimator = None
+        self.estimator: Estimator = None
         self.visibility = True
         self.canonical_pos_vectors = []
         self._perpetua_map = None
@@ -200,7 +201,7 @@ class Object:
             rgb_crops, None, grid_width=3, tag=self.tag, caption=self.caption
         )
 
-    def set_parent_map(self, parent_map: "PerpetuaObjectMap"):
+    def set_parent_map(self, parent_map: Self):
         self._perpetua_map = parent_map
 
     def move(self, receptacle_name: str):
@@ -209,6 +210,7 @@ class Object:
 
         receptacle = self._perpetua_map.get_receptacle(receptacle_name)
         # NOTE: currently only using the first canonical vector
+        # TODO: Sample among all canonical vectors
         vector = receptacle.canonical_pos_vectors[0]
         bbox_min = receptacle.vertices.min(axis=0)
         bbox_max = receptacle.vertices.max(axis=0)
