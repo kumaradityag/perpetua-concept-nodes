@@ -5,8 +5,6 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig
 
-from typing import Dict, List, Optional, Set
-
 from concept_graphs.utils import load_map
 from concept_graphs.mapping.ObjectMap import ObjectMap
 from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
@@ -45,20 +43,15 @@ def main(cfg: DictConfig):
     # Run Query Logic
     results = engine.process_queries(queries=pickupable_names)
 
+    # Save Results
     output_path = concept_nodes_map_path / "assignments"
     engine.save_results(results, output_path=output_path, sssd_data=dataset.sssd_data)
     log.info(f"Results saved to {output_path}")
 
+    # Update Perpetua Map
     pickupable_map_ids, receptacle_map_ids = engine.get_map_object_ids()
     concept_nodes_map: ObjectMap = load_map(concept_nodes_map_path / "map.pkl")
-    current_p2r_mapping = {
-        p: (
-            results[p]["present_receptacle_name"]
-            if p in results and results[p].get("present", False)
-            else None
-        )
-        for p in pickupable_names
-    }
+    current_p2r_mapping = engine.parse_assignments(results, pickupable_names)
 
     perpetua_map: PerpetuaObjectMap = engine.update_perpetua_map(
         0.0,

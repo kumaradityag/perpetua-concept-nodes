@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 from .Object import Object, ObjectType
+from perpetua2.utils.filter_state import Object as Estimator
 
 
 class MapState(Enum):
@@ -61,44 +62,54 @@ class PerpetuaObjectMap:
     def get_pickupable(self, name: str) -> Object:
         return self._pickupables[name]
 
-    def add_pickupable(
+    def _add_object(
         self,
         name: str,
         obj: Object,
-        estimator,
-        visibility: bool,
+        obj_type: ObjectType,
+        target_dict: Optional[Dict[str, Object]] = None,
+        visibility: bool = True,
+        **kwargs,
     ) -> Object:
-        pickupable = self._clone_object(obj)
-        pickupable.obj_type = ObjectType.PICKUPABLE
-        pickupable.name = name
-        pickupable.estimator = estimator
-        pickupable.visibility = visibility
-        self._register_object(name, pickupable)
-        self._pickupables[name] = pickupable
+        """Internal helper to handle common object registration logic."""
+        new_obj = self._clone_object(obj)
+        new_obj.obj_type = obj_type
+        new_obj.name = name
+        new_obj.visibility = visibility
+
+        # Set any extra attributes passed (e.g., estimator)
+        for key, value in kwargs.items():
+            setattr(new_obj, key, value)
+
+        self._register_object(name, new_obj)
+
+        # Only add to a specific dictionary if one is provided
+        if target_dict is not None:
+            target_dict[name] = new_obj
+
         self._refresh_state()
         self._refresh_geometry_cache()
-        return pickupable
+        return new_obj
+
+    def add_pickupable(
+        self, name: str, obj: Object, estimator: Estimator, visibility: bool
+    ) -> Object:
+        return self._add_object(
+            name,
+            obj,
+            ObjectType.PICKUPABLE,
+            target_dict=self._pickupables,
+            visibility=visibility,
+            estimator=estimator,  # Passed via **kwargs
+        )
 
     def add_receptacle(self, name: str, obj: Object) -> Object:
-        receptacle = self._clone_object(obj)
-        receptacle.obj_type = ObjectType.RECEPTACLE
-        receptacle.name = name
-        receptacle.visibility = True
-        self._register_object(name, receptacle)
-        self._receptacles[name] = receptacle
-        self._refresh_state()
-        self._refresh_geometry_cache()
-        return receptacle
+        return self._add_object(
+            name, obj, ObjectType.RECEPTACLE, target_dict=self._receptacles
+        )
 
     def add_background(self, name: str, obj: Object) -> Object:
-        background = self._clone_object(obj)
-        background.obj_type = ObjectType.BACKGROUND
-        background.name = name
-        background.visibility = True
-        self._register_object(name, background)
-        self._refresh_state()
-        self._refresh_geometry_cache()
-        return background
+        return self._add_object(name, obj, ObjectType.BACKGROUND)
 
     def set_edges(self, edges: Dict[str, List[str]], move_pickupables: bool = True):
         attached = {}
