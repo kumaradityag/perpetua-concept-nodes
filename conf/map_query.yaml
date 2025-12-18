@@ -7,5 +7,6 @@ defaults:
 map_path: ${output_dir}/latest_map
 perpetua_estimators_path: ${data_dir}/perpetua_estimators
 perpetua_map_path: ${data_dir}/perpetua_map
+perpetua_map_full_overwrite: false
 device: cuda
-debug: true
+debug: false

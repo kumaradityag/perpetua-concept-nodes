@@ -1,10 +1,17 @@
 from typing import Union
+from enum import Enum
 import numpy as np
 import open3d as o3d
 from .Segment import Segment
 from .SegmentHeap import SegmentHeap
 from .pcd_callbacks.PointCloudCallback import PointCloudCallback
 import uuid
+
+
+class ObjectType(Enum):
+    RECEPTACLE = "Receptacle"
+    PICKUPABLE = "Pickupable"
+    BACKGROUND = "Background"
 
 
 class Object:
@@ -72,7 +79,13 @@ class Object:
 
         self.id = uuid.uuid4()
 
-        # TODO: Implement additional attributes as needed
+        # Perpetua attributes
+        self.name = None
+        self.obj_type = ObjectType.BACKGROUND
+        self.estimator = None
+        self.visibility = True
+        self.canonical_pos_vectors = []
+        self._perpetua_map = None
 
     @property
     def labels(self):
@@ -186,6 +199,30 @@ class Object:
         plot_grid_images(
             rgb_crops, None, grid_width=3, tag=self.tag, caption=self.caption
         )
+
+    def set_parent_map(self, parent_map: "PerpetuaObjectMap"):
+        self._perpetua_map = parent_map
+
+    def move(self, receptacle_name: str):
+        if self._perpetua_map is None:
+            raise RuntimeError("Object is not attached to a Perpetua map.")
+
+        receptacle = self._perpetua_map.get_receptacle(receptacle_name)
+        # NOTE: currently only using the first canonical vector
+        vector = receptacle.canonical_pos_vectors[0]
+        bbox_min = receptacle.vertices.min(axis=0)
+        bbox_max = receptacle.vertices.max(axis=0)
+        bbox_extent = bbox_max - bbox_min
+
+        noise = np.random.uniform(-0.05, 0.05, size=3) * bbox_extent
+        candidate_point = receptacle.centroid + vector + noise
+        target_point = np.clip(candidate_point, bbox_min, bbox_max)
+        translation = target_point - self.centroid
+
+        self.pcd.translate(translation)
+        self.pcd_np = self.pcd_np + translation
+        self.vertices = self.vertices + translation
+        self.centroid = self.centroid + translation
 
 
 class RunningAverageObject(Object):
