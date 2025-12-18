@@ -21,6 +21,7 @@ dependencies = [
     "rgbd-dataset",
     "ipdb>=0.13.13",
     "viser>=1.0.16",
+    "black>=25.12.0",
 ]
 requires-python = ">=3.10"
 

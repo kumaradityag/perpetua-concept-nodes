@@ -270,6 +270,7 @@ name = "concept-graphs"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "black" },
     { name = "decord" },
     { name = "einops" },
     { name = "flax" },
@@ -304,6 +305,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "black", specifier = ">=25.12.0" },
     { name = "black", marker = "extra == 'dev'" },
     { name = "decord" },
     { name = "einops" },

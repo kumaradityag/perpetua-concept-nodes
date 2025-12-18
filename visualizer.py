@@ -1,15 +1,19 @@
+from typing import List, Optional
 import hydra
 import torch
 from omegaconf import DictConfig
 import logging
+from scipy.spatial.transform import Rotation as Rsc
+import numpy as np
+import viser
+from natsort import natsorted
 
 from pathlib import Path
 import numpy as np
 import open3d as o3d
-import open3d.visualization.gui as gui
-import copy
+import cv2
 
-from concept_graphs.utils import load_map, set_seed, load_point_cloud
+from concept_graphs.utils import set_seed, load_point_cloud
 from concept_graphs.viz.utils import similarities_to_rgb
 from concept_graphs.mapping.similarity.semantic import CosineSimilarity01
 
@@ -17,155 +21,296 @@ from concept_graphs.mapping.similarity.semantic import CosineSimilarity01
 log = logging.getLogger(__name__)
 
 
-class CallbackManager:
-    def __init__(self, pcd_o3d, clip_ft, ft_extractor, mode):
+class ViserServer:
+    def __init__(self, pcd_o3d, clip_ft, ft_extractor, imgs = None, point_shape: str = "circle"):
+        self.server = viser.ViserServer()
+        self.point_shape = point_shape
         self.ft_extractor = ft_extractor
-        self.mode = mode
 
         # Geometries
-        self.pcd = pcd_o3d
-        self.bbox = [pcd.get_oriented_bounding_box() for pcd in self.pcd]
-
-        self.pcd_names = [f"pcd_{i}" for i in range(len(self.pcd))]
-        self.bbox_names = [f"bbox_{i}" for i in range(len(self.pcd))]
-        self.centroid_names = [f"centroid_{i}" for i in range(len(self.pcd))]
-        self.label_names = [str(i) for i in range(len(self.pcd))]
-        self.centroids = []
-        self.label_coord = []
-        for p in self.pcd:
-            centroid = o3d.geometry.TriangleMesh.create_sphere(radius=0.03)
-            c = np.mean(np.asarray(p.points), axis=0)
-            centroid.translate(c)
-            self.centroids.append(centroid)
-            self.label_coord.append(c)
-
-        # Change color to black
-        for b in self.bbox:
-            b.color = (0, 0, 0)
-
-        # Colorings
-        self.og_colors = [
-            o3d.utility.Vector3dVector(copy.deepcopy(p.colors)) for p in self.pcd
+        self.objects: List[o3d.geometry.PointCloud] = pcd_o3d
+        self.labels = [f"{i}" for i in range(len(self.objects))]
+        self.bbox: List[o3d.geometry.OrientedBoundingBox] = [
+            pcd.get_oriented_bounding_box() for pcd in self.objects
         ]
-        self.sim_query = 0.5 * np.ones(len(self.pcd))
-        self.random_colors = np.random.rand(len(self.pcd), 3)
+        self.centroid = [np.mean(np.asarray(p.points), axis=0) for p in self.objects]
 
-        # Color centroids
-        for c, color in zip(self.centroids, self.random_colors):
-            c.paint_uniform_color(color)
+        # Semantics
+        self.imgs = imgs 
+
+        # Handles
+        self.object_names: List[str] = []
+        self.object_handles: List[viser.PointCloudHandle] = []
+        self.centroid_handles: List[viser.SphereHandle] = []
+        self.box_handles: List[viser.BoxHandle] = []
+        self.label_handles: List[viser.LabelHandle] = []
+        self.current_image_handle: Optional[viser.GuiImageHandle] = None
 
         # Similarities
         device = ft_extractor.device if ft_extractor is not None else "cpu"
         self.semantic_tensor = torch.from_numpy(clip_ft).to(device)
         self.semantic_sim = CosineSimilarity01()
 
-        # Toggles
-        self.bbox_toggle = False
-        self.centroid_toggle = False
-        self.number_toggle = False
+        # GUI
+        with self.server.gui.add_folder("Point Cloud"):
+            self.pcd_rgb_gui_button = self.server.gui.add_button(
+                "RGB",
+                icon=viser.Icon.MOUSE,
+            )
+            self.pcd_rgb_gui_button.on_click(self.on_rgb_button_click)
 
-    def add_geometries(self, vis, geometry_names, geometries):
-        if self.mode == "keycallback":
-            for geometry in geometries:
-                vis.add_geometry(geometry)
-        elif self.mode == "gui":
-            for name, geometry in zip(geometry_names, geometries):
-                vis.add_geometry(name, geometry)
+            self.pcd_segmentation_gui_button = self.server.gui.add_button(
+                "Segmentation",
+                icon=viser.Icon.MOUSE,
+            )
+            self.pcd_segmentation_gui_button.on_click(self.on_segmentation_button_click)
 
-    def remove_geometries(self, vis, geometry_names, geometries):
-        if self.mode == "keycallback":
-            for geometry in geometries:
-                vis.remove_geometry(geometry)
-        elif self.mode == "gui":
-            for name in geometry_names:
-                vis.remove_geometry(name)
+            self.pcd_centroid_gui_checkbox = self.server.gui.add_checkbox(
+                "Centroid",
+                initial_value=False,
+            )
+            self.pcd_centroid_gui_checkbox.on_update(self.on_centroid_checkbox_change)
 
-    def update_geometries(self, vis, geometry_names, geometries):
-        if self.mode == "keycallback":
-            for geometry in geometries:
-                vis.update_geometry(geometry)
-        elif self.mode == "gui":
-            self.remove_geometries(vis, geometry_names, geometries)
-            self.add_geometries(vis, geometry_names, geometries)
+            self.pcd_boxes_gui_checkbox = self.server.gui.add_checkbox(
+                "Boxes",
+                initial_value=False,
+            )
+            self.pcd_boxes_gui_checkbox.on_update(self.on_boxes_checkbox_change)
 
-    def toggle_bbox(self, vis):
-        if not self.bbox_toggle:
-            self.add_geometries(vis, self.bbox_names, self.bbox)
+            self.pcd_labels_gui_checkbox = self.server.gui.add_checkbox(
+                "Labels",
+                initial_value=False,
+            )
+            self.pcd_labels_gui_checkbox.on_update(self.on_labels_checkbox_change)
+
+            self.pcd_size_gui_slider = self.server.gui.add_slider(
+                "Point size",
+                min=0.001,
+                max=0.030,
+                step=0.001,
+                initial_value=0.010,
+                disabled=False,
+            )
+            self.pcd_size_gui_slider.on_update(self.on_point_size_change)
+
+        with self.server.gui.add_folder("CLIP Query"):
+            self.clip_gui_text = self.server.gui.add_text(
+                "Query",
+                initial_value="",
+            )
+            self.clip_gui_button = self.server.gui.add_button(
+                "CLIP Similarities",
+                icon=viser.Icon.MOUSE,
+            )
+            self.clip_gui_button.on_click(self.on_clip_query_submit)
+
+    def start(self):
+        rng = np.random.default_rng(42)
+        self.segmentation_colors = rng.random((len(self.objects), 3))
+        self.display_object_rgb()
+
+    # Gui callbacks and inputs
+    def on_clip_query_submit(self, data):
+        self.clip_query = self.clip_gui_text.value
+        sim_query = self.query(self.clip_gui_text.value)
+        self.display_object_similarity(sim_query)
+
+    def on_rgb_button_click(self, data):
+        self.display_object_rgb()
+
+    def on_segmentation_button_click(self, data):
+        self.display_object_segmentation()
+
+    def on_centroid_checkbox_change(self, data):
+        show_centroid = self.pcd_centroid_gui_checkbox.value
+        if show_centroid:
+            self.display_object_centroids()
         else:
-            self.remove_geometries(vis, self.bbox_names, self.bbox)
-        self.bbox_toggle = not self.bbox_toggle
+            self.clear_centroids()
 
-    def toggle_centroids(self, vis):
-        if not self.centroid_toggle:
-            self.add_geometries(vis, self.centroid_names, self.centroids)
+    def on_boxes_checkbox_change(self, data):
+        show_boxes = self.pcd_boxes_gui_checkbox.value
+        if show_boxes:
+            self.display_boxes()
         else:
-            self.remove_geometries(vis, self.centroid_names, self.centroids)
-        self.centroid_toggle = not self.centroid_toggle
+            self.clear_boxes()
 
-    def toggle_numbers(self, vis):
-        if not self.number_toggle:
-            for c, n in zip(self.label_coord, self.label_names):
-                vis.add_3d_label(c, n)
+    def on_labels_checkbox_change(self, data):
+        show_labels = self.pcd_labels_gui_checkbox.value
+        if show_labels:
+            self.display_labels()
         else:
-            vis.clear_3d_labels()
-        self.number_toggle = not self.number_toggle
+            self.clear_labels()
 
-    def toggle_sim(self, vis):
-        rgb = similarities_to_rgb(self.sim_query, cmap_name="viridis")
-        for p, c, color in zip(self.pcd, self.centroids, rgb):
-            p.paint_uniform_color(np.array(color) / 255)
-            c.paint_uniform_color(np.array(color) / 255)
-        self.update_geometries(vis, self.pcd_names, self.pcd)
-        if self.centroid_toggle:
-            self.update_geometries(vis, self.centroid_names, self.centroids)
+    def on_point_size_change(self, data):
+        point_size = self.pcd_size_gui_slider.value
 
-    def toggle_random_color(self, vis):
-        for p, c, color in zip(self.pcd, self.centroids, self.random_colors):
-            p.paint_uniform_color(color)
-            c.paint_uniform_color(color)
-        self.update_geometries(vis, self.pcd_names, self.pcd)
-        if self.centroid_toggle:
-            self.update_geometries(vis, self.centroid_names, self.centroids)
+        for handle in self.object_handles:
+            handle.point_size = point_size
 
-    def toggle_rgb(self, vis):
-        for p, c in zip(self.pcd, self.og_colors):
-            p.colors = c
-        self.update_geometries(vis, self.pcd_names, self.pcd)
+    # scene manipulation
+    def reset(self):
+        self.server.scene.reset()
+        self.display_object_rgb()
 
-    def query(self, vis):
+    def clear_main_objects(self):
+        for name in self.object_names:
+            self.server.scene.remove_by_name(name)
+            self.server.scene.remove_by_name(f"{name}_hitbox")
+        self.object_names = []
+        self.object_handles = []
+
+    def clear_centroids(self):
+        for sphere in self.centroid_handles:
+            sphere.remove()
+        self.centroid_handles = []
+
+    def clear_boxes(self):
+        for box in self.box_handles:
+            box.remove()
+        self.box_handles = []
+
+    def clear_labels(self):
+        for label in self.label_handles:
+            label.remove()
+        self.label_handles = []
+
+    def display_object_point_clouds(self, colors: np.ndarray = None):
+        self.clear_main_objects()
+
+        for i, obj in enumerate(self.objects):
+            name = f"object_{i}"
+            # Downsample point clouds to make life easier for viser
+            pcd = obj.voxel_down_sample(voxel_size=0.005)
+            pcd_points = np.asarray(pcd.points)
+            if colors is not None:
+                pcd_colors = np.tile(colors[i], (pcd_points.shape[0], 1))
+            else:
+                # Original rgb color
+                pcd_colors = np.asarray(pcd.colors)
+            handle = self.server.scene.add_point_cloud(
+                name,
+                pcd_points,
+                pcd_colors,
+                point_size=self.pcd_size_gui_slider.value,
+                point_shape=self.point_shape,
+            )
+            # Add invisible hitbox for clicking
+            bbox = self.bbox[i]
+            wxyz = Rsc.from_matrix(np.array(bbox.R, copy=True)).as_quat(scalar_first=True)
+            hitbox_handle = self.server.scene.add_box(
+                name=f"{name}_hitbox",
+                position=bbox.center,
+                dimensions=bbox.extent,
+                wxyz=wxyz,
+                color=(255, 255, 255),
+                opacity=0.0,
+            )
+            hitbox_handle.on_click(lambda _, idx=i: self.on_object_clicked(idx))
+
+            self.object_names.append(name)
+            self.object_handles.append(handle)
+
+    def display_object_centroids(self):
+        # Clear previous spheres
+        self.clear_centroids()
+
+        for i, center in enumerate(self.centroid):
+            name = f"centroid_{i}"
+            sphere = self.server.scene.add_icosphere(
+                name=name,
+                color=(255, 0, 0),
+                radius=0.03,
+                position=center,
+            )
+            sphere.on_click(lambda _, idx=i: self.on_object_clicked(idx))
+            self.centroid_handles.append(sphere)
+
+    def display_boxes(self):
+        # Clear existing boxes
+        self.clear_boxes()
+
+        for i, box in enumerate(self.bbox):
+            box_name = f"box_{i}"
+            center = box.center
+            extent = box.extent
+            R = np.array(box.R, copy=True)
+            wxyz = Rsc.from_matrix(R).as_quat(scalar_first=True)
+
+            box = self.server.scene.add_box(
+                name=box_name,
+                color=(0, 1, 0),
+                dimensions=extent,
+                position=center,
+                wxyz=wxyz,
+                wireframe=True,
+            )
+            self.box_handles.append(box)
+
+    def display_labels(self):
+        self.clear_labels()
+
+        for i, (center, label_text) in enumerate(zip(self.centroid, self.labels)):
+            name = f"label_{i}"
+            label_handle = self.server.scene.add_label(
+                name=name,
+                text=label_text,
+                position=center,
+            )
+            self.label_handles.append(label_handle)
+
+    def on_object_clicked(self, index: int):
+        """Callback to display the image associated with the clicked object."""
+        # Remove previous handle if exists
+        if self.current_image_handle is not None:
+            self.current_image_handle.remove()
+            self.current_image_handle = None
+
+        if self.imgs is None:
+            log.warning("No images were provided to display.")
+            return
+
+        # Check if we have an image for this index
+        if index >= len(self.imgs):
+            print(f"No image found for object {index}")
+            return
+
+        image_data = self.imgs[index]
+
+        # 3. Add the new image to the top of the GUI sidebar
+        # We use a high 'order' or put it in a folder if you prefer organization
+        self.current_image_handle = self.server.gui.add_image(
+            image=image_data,
+            label=f"Object {index} View",
+        )
+
+    def display_object_rgb(self):
+        self.display_object_point_clouds()
+
+    def display_object_segmentation(self):
+        self.display_object_point_clouds(colors=self.segmentation_colors)
+
+    def display_object_similarity(self, similarity_scores: np.ndarray):
+        self.display_object_point_clouds(
+            colors=similarities_to_rgb(similarity_scores, cmap_name="viridis")
+        )
+
+    def query(self, query: str):
         if self.ft_extractor is None:
             log.warning("No feature extractor provided.")
             return
-        query = input("Enter query: ")
         query_ft = self.ft_extractor.encode_text([query])
-        self.sim_query = self.semantic_sim(query_ft, self.semantic_tensor)
-        self.sim_query = self.sim_query.squeeze().cpu().numpy()
-        self.toggle_sim(vis)
+        sim_query = self.semantic_sim(query_ft, self.semantic_tensor)
+        return sim_query.squeeze().cpu().numpy()
 
-    def view(self, vis):
-        pass
-        obj_id = input("Object Id: ")
-        obj_id = int(obj_id)
-        pass
 
-    def register_callbacks(self, vis):
-        if self.mode == "keycallback":
-            vis.register_key_callback(ord("R"), self.toggle_rgb)
-            vis.register_key_callback(ord("Z"), self.toggle_random_color)
-            vis.register_key_callback(ord("S"), self.toggle_sim)
-            vis.register_key_callback(ord("B"), self.toggle_bbox)
-            vis.register_key_callback(ord("C"), self.toggle_centroids)
-            vis.register_key_callback(ord("Q"), self.query)
-            vis.register_key_callback(ord("V"), self.view)
-        else:
-            vis.add_action("RGB", self.toggle_rgb)
-            vis.add_action("Random Color", self.toggle_random_color)
-            vis.add_action("Similarity", self.toggle_sim)
-            vis.add_action("Toggle Bbox", self.toggle_bbox)
-            vis.add_action("Toggle Centroid", self.toggle_centroids)
-            vis.add_action("Toggle Number", self.toggle_numbers)
-            vis.add_action("CLIP Query", self.query)
-            vis.add_action("View Segments", self.view)
+def load_imgs_from_folder(folder_path: Path) -> List[np.ndarray]:
+    imgs = []
+    for img_path in natsorted(folder_path.glob("*.png")):
+        img = cv2.imread(str(img_path))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        imgs.append(img)
+    return imgs
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="visualizer")
@@ -174,6 +319,7 @@ def main(cfg: DictConfig):
     path = Path(cfg.map_path)
     clip_ft = np.load(path / "clip_features.npy")
     pcd_o3d = load_point_cloud(path)
+    imgs = load_imgs_from_folder(path / "object_viz")
     ft_extractor = (
         hydra.utils.instantiate(cfg.ft_extraction)
         if hasattr(cfg, "ft_extraction")
@@ -182,39 +328,12 @@ def main(cfg: DictConfig):
 
     log.info(f"Loading map with a total of {len(pcd_o3d)} objects")
 
-    # Callback Manager
-    manager = CallbackManager(
-        pcd_o3d=pcd_o3d, clip_ft=clip_ft, ft_extractor=ft_extractor, mode=cfg.mode
+    viser_server = ViserServer(
+        pcd_o3d=pcd_o3d, clip_ft=clip_ft, ft_extractor=ft_extractor, imgs=imgs
     )
-
-    # Visualizer
-    if cfg.mode == "keycallback":
-        vis = o3d.visualization.VisualizerWithKeyCallback()
-        vis.create_window(window_name=f"Open3D", width=1280, height=720)
-
-        manager.add_geometries(vis, manager.pcd_names, manager.pcd)
-        manager.register_callbacks(vis)
-        vis.run()
-    elif cfg.mode == "gui":
-        app = gui.Application.instance
-        app.initialize()
-
-        vis = o3d.visualization.O3DVisualizer("Open3D - 3D Text", 1024, 768)
-        vis.set_background([1.0, 1.0, 1.0, 1.0], bg_image=None)
-        vis.show_settings = True
-        vis.show_skybox(False)
-        vis.enable_raw_mode(True)
-        manager.add_geometries(vis, manager.pcd_names, manager.pcd)
-        manager.register_callbacks(vis)
-        # for idx in range(0, len(points.points)):
-        #     vis.add_3d_label(points.points[idx], "{}".format(idx))
-        vis.reset_camera_to_default()
-
-        app.add_window(vis)
-        app.run()
-
-    else:
-        raise ValueError("Invalid mode.")
+    viser_server.start()
+    while True:
+        pass
 
 
 if __name__ == "__main__":
