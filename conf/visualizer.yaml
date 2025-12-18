@@ -3,6 +3,8 @@ defaults:
   - paths: paths
   - _self_
 
-map_path: ${output_dir}/latest_map
+# map_path: ${output_dir}/latest_map
+map_path: ${data_dir}/perpetua_map
+map_type: perpetua # options: concept_nodes, perpetua
 device: cuda
 seed: 42

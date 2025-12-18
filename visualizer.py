@@ -17,12 +17,16 @@ from concept_graphs.utils import set_seed, load_point_cloud
 from concept_graphs.viz.utils import similarities_to_rgb
 from concept_graphs.mapping.similarity.semantic import CosineSimilarity01
 
+from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
+
 # A logger for this file
 log = logging.getLogger(__name__)
 
 
 class ViserServer:
-    def __init__(self, pcd_o3d, clip_ft, ft_extractor, imgs = None, point_shape: str = "circle"):
+    def __init__(
+        self, pcd_o3d, clip_ft, ft_extractor, imgs=None, point_shape: str = "circle"
+    ):
         self.server = viser.ViserServer()
         self.point_shape = point_shape
         self.ft_extractor = ft_extractor
@@ -36,7 +40,7 @@ class ViserServer:
         self.centroid = [np.mean(np.asarray(p.points), axis=0) for p in self.objects]
 
         # Semantics
-        self.imgs = imgs 
+        self.imgs = imgs
 
         # Handles
         self.object_names: List[str] = []
@@ -197,7 +201,9 @@ class ViserServer:
             )
             # Add invisible hitbox for clicking
             bbox = self.bbox[i]
-            wxyz = Rsc.from_matrix(np.array(bbox.R, copy=True)).as_quat(scalar_first=True)
+            wxyz = Rsc.from_matrix(np.array(bbox.R, copy=True)).as_quat(
+                scalar_first=True
+            )
             hitbox_handle = self.server.scene.add_box(
                 name=f"{name}_hitbox",
                 position=bbox.center,
@@ -317,9 +323,17 @@ def load_imgs_from_folder(folder_path: Path) -> List[np.ndarray]:
 def main(cfg: DictConfig):
     set_seed(cfg.seed)
     path = Path(cfg.map_path)
-    clip_ft = np.load(path / "clip_features.npy")
-    pcd_o3d = load_point_cloud(path)
-    imgs = load_imgs_from_folder(path / "object_viz")
+
+    if cfg.map_type == "concept_nodes":
+        clip_ft = np.load(path / "clip_features.npy")
+        pcd_o3d = load_point_cloud(path)
+        imgs = load_imgs_from_folder(path / "object_viz")
+    elif cfg.map_type == "perpetua":
+        perpetua_map: PerpetuaObjectMap = PerpetuaObjectMap.load(path)
+        clip_ft = perpetua_map.semantic_tensor.numpy()
+        pcd_o3d = [obj.pcd for obj in perpetua_map]
+        imgs = None
+
     ft_extractor = (
         hydra.utils.instantiate(cfg.ft_extraction)
         if hasattr(cfg, "ft_extraction")
