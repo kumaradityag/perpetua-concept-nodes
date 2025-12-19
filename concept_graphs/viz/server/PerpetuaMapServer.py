@@ -40,4 +40,5 @@ class PerpetuaMapServer(ObjectMapServer):
     def on_time_query_submit(self, data):
         query_time = self.time_gui_number.value
         self.toolbox.temporal_map_query(query_time)
-        self.update_object_map(self.object_map)
+        # self.update_object_map(self.object_map)
+        self._update_server_state()

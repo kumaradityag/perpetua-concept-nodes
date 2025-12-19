@@ -281,6 +281,13 @@ class PerpetuaObjectMap:
         )  # z axis is flipped in these scenes
         return target - receptacle.centroid
 
+    def downsample_objects(self, voxel_size: float = None):
+        for obj in self:
+            if voxel_size is not None:
+                obj.downsample_pcd(voxel_size=voxel_size)
+            else:
+                obj.downsample()
+
     def to(self, device: str):
         self.device = device
         if self.semantic_tensor is not None:

@@ -190,8 +190,7 @@ class ObjectMapServer:
 
         for i, obj in enumerate(self.object_map):
             name = f"object_{i}"
-            # Downsample point clouds to make life easier for viser
-            pcd = obj.pcd.voxel_down_sample(voxel_size=0.005)
+            pcd = obj.pcd
             pcd_points = np.asarray(pcd.points)
             if colors is not None:
                 pcd_colors = np.tile(colors[i], (pcd_points.shape[0], 1))

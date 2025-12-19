@@ -10,6 +10,7 @@ from perpetua2.utils.filter_state import Object as Estimator
 from perpetua2.filters.BayesianPerpetua import object_predict
 import uuid
 
+
 class ObjectType(Enum):
     RECEPTACLE = "Receptacle"
     PICKUPABLE = "Pickupable"
@@ -102,8 +103,10 @@ class Object:
 
     def update(self):
         raise NotImplementedError
-    
-    def predict(self, t: Union[float, jnp.array], receptacle_names: Optional[List[str]] = None) -> np.ndarray:
+
+    def predict(
+        self, t: Union[float, jnp.array], receptacle_names: Optional[List[str]] = None
+    ) -> np.ndarray:
         if isinstance(t, float):
             t = jnp.array([t])
         out = object_predict(self.estimator, t, receptacle_names=receptacle_names)
@@ -166,6 +169,9 @@ class Object:
     def downsample(self):
         if self.downsampling_callback is not None:
             self.pcd = self.downsampling_callback(self.pcd)
+
+    def downsample_pcd(self, voxel_size: float):
+        self.pcd = self.pcd.voxel_down_sample(voxel_size=voxel_size)
 
     def cluster_top_k(self, k: int):
         ft = [v.semantic_ft for v in self.segments]

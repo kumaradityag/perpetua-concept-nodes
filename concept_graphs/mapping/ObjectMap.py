@@ -115,9 +115,12 @@ class ObjectMap:
         for obj in self:
             obj.denoise()
 
-    def downsample_objects(self):
+    def downsample_objects(self, voxel_size: float = None):
         for obj in self:
-            obj.downsample()
+            if voxel_size is not None:
+                obj.downsample_pcd(voxel_size=voxel_size)
+            else:
+                obj.downsample()
 
     def collate_objects(self):
         for obj in self:

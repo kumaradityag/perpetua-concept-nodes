@@ -19,11 +19,12 @@ class PerpetuaMapToolbox(ObjectMapToolbox):
     def load_object_map(self, map_path: str = None):
         object_map = PerpetuaObjectMap.load(map_path)
         object_map.to(self.device)
+        object_map.downsample_objects(voxel_size=0.005)
         return object_map
 
     def update_object_map(self, object_map):
         self.object_map = object_map
-        self.object_map.to(self.device)
+        self.object_map.downsample_objects(voxel_size=0.01)
         self.object_map.refresh_state()
         self.reset()
 
