@@ -1,0 +1,12 @@
+defaults:
+  - inference/toolbox@toolbox: ObjectMapToolbox
+  - server@server: ObjectMapServer
+  - paths: paths
+  - _self_
+
+map_path: ${output_dir}/semistaticsim_run_503_cg-detector_2025-12-18-00-06-43.513458
+# map_path: ${data_dir}/perpetua_map
+map_type: concept_nodes # options: concept_nodes, perpetua
+# map_type: perpetua # options: concept_nodes, perpetua
+device: cuda
+seed: 42

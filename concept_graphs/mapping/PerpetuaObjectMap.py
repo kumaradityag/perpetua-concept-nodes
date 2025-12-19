@@ -54,6 +54,9 @@ class PerpetuaObjectMap:
     def __iter__(self):
         return iter(self.objects.values())
 
+    def __getitem__(self, item):
+        return self.objects[item]
+
     def has_object(self, name: str) -> bool:
         return name in self.objects
 
@@ -188,7 +191,7 @@ class PerpetuaObjectMap:
         log.info(f"Loading PerpetuaObjectMap from {path}")
         map_file = path / "perpetua_map.pkl"
         with open(map_file, "rb") as f:
-            loaded_map: "PerpetuaObjectMap" = pickle.load(f)
+            loaded_map: Self = pickle.load(f)
 
         for obj in loaded_map.objects.values():
             if isinstance(obj.pcd, dict):

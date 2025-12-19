@@ -1,0 +1,3 @@
+_target_: concept_graphs.viz.server.ObjectMapServer.ObjectMapServer
+point_shape: circle
+toolbox: null

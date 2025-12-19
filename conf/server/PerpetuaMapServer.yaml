@@ -1,0 +1,2 @@
+_target_: concept_graphs.mapping.PerpetuaObjectMap.PerpetuaObjectMap.load
+path: ${map_path}

@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Self
 import numpy as np
 import torch
 import open3d as o3d
@@ -9,6 +9,9 @@ import cv2
 from .Object import Object, ObjectFactory
 from .similarity.Similarity import Similarity
 from .utils import pairs_to_connected_components, compute_bounds
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class ObjectMap:
@@ -343,6 +346,20 @@ class ObjectMap:
 
         with open(path, "wb") as f:
             pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str) -> None:
+        import dill as pickle
+        map_path = Path(path) / 'map.pkl'
+        log.info(f"Loading PerpetuaObjectMap from {path}")
+
+        with open(map_path, "rb") as f:
+            loaded_map: Self = pickle.load(f)
+
+        for obj in loaded_map:
+            obj.pcd_to_o3d()
+
+        return loaded_map
 
     def export(self, path: str) -> None:
         path = Path(path)

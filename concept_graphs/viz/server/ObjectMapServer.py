@@ -1,65 +1,39 @@
 from typing import List, Optional
-import hydra
-import torch
-from omegaconf import DictConfig
-import logging
 from scipy.spatial.transform import Rotation as Rsc
 import numpy as np
 import viser
-from natsort import natsorted
+import matplotlib.pyplot as plt
 
-from pathlib import Path
-import numpy as np
-import open3d as o3d
-import cv2
-
-from concept_graphs.utils import set_seed, load_point_cloud
 from concept_graphs.viz.utils import similarities_to_rgb
-from concept_graphs.mapping.similarity.semantic import CosineSimilarity01
+from concept_graphs.mapping.ObjectMap import ObjectMap
+from concept_graphs.inference.toolbox.ObjectMapToolbox import ObjectMapToolbox
 
-from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
+import logging
 
-# A logger for this file
 log = logging.getLogger(__name__)
 
 
-class ViserServer:
-    def __init__(
-        self, pcd_o3d, clip_ft, ft_extractor, imgs=None, point_shape: str = "circle"
-    ):
+class ObjectMapServer:
+    def __init__(self, toolbox: ObjectMapToolbox, point_shape: str = "circle"):
         self.server = viser.ViserServer()
         self.point_shape = point_shape
-        self.ft_extractor = ft_extractor
-
-        # Geometries
-        self.objects: List[o3d.geometry.PointCloud] = pcd_o3d
-        self.labels = [f"{i}" for i in range(len(self.objects))]
-        self.bbox: List[o3d.geometry.OrientedBoundingBox] = [
-            pcd.get_oriented_bounding_box() for pcd in self.objects
-        ]
-        self.centroid = [np.mean(np.asarray(p.points), axis=0) for p in self.objects]
-
-        # Semantics
-        self.imgs = imgs
+        self.toolbox = toolbox
 
         # Handles
-        self.object_names: List[str] = []
         self.object_handles: List[viser.PointCloudHandle] = []
+        self.hitbox_handles: List[viser.PointCloudHandle] = []
         self.centroid_handles: List[viser.SphereHandle] = []
         self.box_handles: List[viser.BoxHandle] = []
         self.label_handles: List[viser.LabelHandle] = []
         self.current_image_handle: Optional[viser.GuiImageHandle] = None
 
-        # Similarities
-        device = ft_extractor.device if ft_extractor is not None else "cpu"
-        self.semantic_tensor = torch.from_numpy(clip_ft).to(device)
-        self.semantic_sim = CosineSimilarity01()
-
-        # Containers
-        self.query_time = None
-
         # GUI
         with self.server.gui.add_folder("Point Cloud"):
+            self.obj_counter_gui_button = self.server.gui.add_number(
+                "# Objects",
+                initial_value=0,
+                disabled=True,
+            )
             self.pcd_rgb_gui_button = self.server.gui.add_button(
                 "RGB",
                 icon=viser.Icon.MOUSE,
@@ -111,25 +85,36 @@ class ViserServer:
             )
             self.clip_gui_button.on_click(self.on_clip_query_submit)
 
-        with self.server.gui.add_folder("Temporal Query"):
-            self.time_gui_number = self.server.gui.add_number(
-                "Time (hours)", initial_value=0, min=0
-            )
-            self.time_gui_button = self.server.gui.add_button(
-                "Predict at Time",
-                icon=viser.Icon.MOUSE,
-            )
-            self.time_gui_button.on_click(self.on_time_query_submit)
+        # Initialize scene
+        self.update_object_map(self.object_map)
 
-    def start(self):
+    @property
+    def object_map(self) -> ObjectMap:
+        return self.toolbox.object_map
+
+    # Server state updates
+    def update_object_map(self, object_map: ObjectMap):
+        self.toolbox.update_object_map(object_map)
         rng = np.random.default_rng(42)
-        self.segmentation_colors = rng.random((len(self.objects), 3))
+        self.segmentation_colors = rng.random((len(object_map), 3))
+        self.reset()
+
+    def reset(self):
+        self.server.scene.reset()
+        self.obj_counter_gui_button.value = len(self.object_map)
+        self.clear_main_objects()
+        self.clear_centroids()
+        self.clear_boxes()
+        self.clear_labels()
         self.display_object_rgb()
+
+    def spin(self):
+        while True:
+            pass
 
     # Gui callbacks and inputs
     def on_clip_query_submit(self, data):
-        self.clip_query = self.clip_gui_text.value
-        sim_query = self.query(self.clip_gui_text.value)
+        sim_query = self.toolbox.clip_query(self.clip_gui_text.value)
         self.display_object_similarity(sim_query)
 
     def on_rgb_button_click(self, data):
@@ -165,30 +150,12 @@ class ViserServer:
         for handle in self.object_handles:
             handle.point_size = point_size
 
-    def on_time_query_submit(self, data):
-        self.query_time = self.time_gui_number.value
-
-    # scene manipulation
-    def reset(self):
-        self.server.scene.reset()
-        self.display_object_rgb()
-
-    def load_object_map(self, object_map: PerpetuaObjectMap):
-        self.objects = [obj.pcd for obj in object_map]
-        self.labels = [f"{i}" for i in range(len(self.objects))]
-        self.bbox: List[o3d.geometry.OrientedBoundingBox] = [
-            pcd.get_oriented_bounding_box() for pcd in self.objects
-        ]
-        self.centroid = [np.mean(np.asarray(p.points), axis=0) for p in self.objects]
-        self.semantic_tensor = object_map.semantic_tensor.to(self.semantic_tensor.device)
-        self.imgs = [obj.segments[0].rgb for obj in object_map]
-        self.reset()
-
+    # Scene clearing methods
     def clear_main_objects(self):
-        for name in self.object_names:
-            self.server.scene.remove_by_name(name)
-            self.server.scene.remove_by_name(f"{name}_hitbox")
-        self.object_names = []
+        for hitbox, pcd in zip(self.hitbox_handles, self.object_handles):
+            hitbox.remove()
+            pcd.remove()
+        self.hitbox_handles = []
         self.object_handles = []
 
     def clear_centroids(self):
@@ -206,13 +173,19 @@ class ViserServer:
             label.remove()
         self.label_handles = []
 
+    def clear_image(self):
+        if self.current_image_handle is not None:
+            self.current_image_handle.remove()
+            self.current_image_handle = None
+
+    # Scene display methods
     def display_object_point_clouds(self, colors: np.ndarray = None):
         self.clear_main_objects()
 
-        for i, obj in enumerate(self.objects):
+        for i, obj in enumerate(self.object_map):
             name = f"object_{i}"
             # Downsample point clouds to make life easier for viser
-            pcd = obj.voxel_down_sample(voxel_size=0.005)
+            pcd = obj.pcd.voxel_down_sample(voxel_size=0.005)
             pcd_points = np.asarray(pcd.points)
             if colors is not None:
                 pcd_colors = np.tile(colors[i], (pcd_points.shape[0], 1))
@@ -227,7 +200,7 @@ class ViserServer:
                 point_shape=self.point_shape,
             )
             # Add invisible hitbox for clicking
-            bbox = self.bbox[i]
+            bbox = obj.pcd.get_oriented_bounding_box()
             wxyz = Rsc.from_matrix(np.array(bbox.R, copy=True)).as_quat(
                 scalar_first=True
             )
@@ -241,20 +214,21 @@ class ViserServer:
             )
             hitbox_handle.on_click(lambda _, idx=i: self.on_object_clicked(idx))
 
-            self.object_names.append(name)
+            self.hitbox_handles.append(hitbox_handle)
             self.object_handles.append(handle)
 
     def display_object_centroids(self):
         # Clear previous spheres
         self.clear_centroids()
 
-        for i, center in enumerate(self.centroid):
+        for i, obj in enumerate(self.object_map):
             name = f"centroid_{i}"
+            centroid = obj.centroid
             sphere = self.server.scene.add_icosphere(
                 name=name,
                 color=(255, 0, 0),
                 radius=0.03,
-                position=center,
+                position=centroid,
             )
             sphere.on_click(lambda _, idx=i: self.on_object_clicked(idx))
             self.centroid_handles.append(sphere)
@@ -263,11 +237,12 @@ class ViserServer:
         # Clear existing boxes
         self.clear_boxes()
 
-        for i, box in enumerate(self.bbox):
+        for i, obj in enumerate(self.object_map):
             box_name = f"box_{i}"
-            center = box.center
-            extent = box.extent
-            R = np.array(box.R, copy=True)
+            bbox = obj.pcd.get_oriented_bounding_box()
+            center = bbox.center
+            extent = bbox.extent
+            R = np.array(bbox.R, copy=True)
             wxyz = Rsc.from_matrix(R).as_quat(scalar_first=True)
 
             box = self.server.scene.add_box(
@@ -283,39 +258,38 @@ class ViserServer:
     def display_labels(self):
         self.clear_labels()
 
-        for i, (center, label_text) in enumerate(zip(self.centroid, self.labels)):
+        for i, obj in enumerate(self.object_map):
             name = f"label_{i}"
+            centroid = obj.centroid
+            label_text = obj.name if obj.name is not None else f"Object {i}"
             label_handle = self.server.scene.add_label(
                 name=name,
                 text=label_text,
-                position=center,
+                position=centroid,
             )
             self.label_handles.append(label_handle)
 
     def on_object_clicked(self, index: int):
         """Callback to display the image associated with the clicked object."""
-        # Remove previous handle if exists
-        if self.current_image_handle is not None:
-            self.current_image_handle.remove()
-            self.current_image_handle = None
+        self.clear_image()
 
-        if self.imgs is None:
-            log.warning("No images were provided to display.")
-            return
+        obj = self.object_map[index]
+        # Generate the image from the object's views
+        obj.view_images_caption()
+        fig = plt.gcf()
+        fig.canvas.draw()
+        # Convert the Matplotlib figure to a NumPy array
+        image_data = np.asarray(fig.canvas.renderer.buffer_rgba())
+        label_text = (
+            f"{obj.name} View" if obj.name is not None else f"Object {index} View"
+        )
 
-        # Check if we have an image for this index
-        if index >= len(self.imgs):
-            print(f"No image found for object {index}")
-            return
-
-        image_data = self.imgs[index]
-
-        # 3. Add the new image to the top of the GUI sidebar
-        # We use a high 'order' or put it in a folder if you prefer organization
+        # Add the new image to the top of the GUI sidebar
         self.current_image_handle = self.server.gui.add_image(
             image=image_data,
-            label=f"Object {index} View",
+            label=label_text,
         )
+        plt.close(fig)
 
     def display_object_rgb(self):
         self.display_object_point_clouds()
@@ -327,60 +301,3 @@ class ViserServer:
         self.display_object_point_clouds(
             colors=similarities_to_rgb(similarity_scores, cmap_name="viridis")
         )
-
-    def query(self, query: str):
-        if self.ft_extractor is None:
-            log.warning("No feature extractor provided.")
-            return
-        query_ft = self.ft_extractor.encode_text([query])
-        sim_query = self.semantic_sim(query_ft, self.semantic_tensor)
-        return sim_query.squeeze().cpu().numpy()
-
-
-def load_imgs_from_folder(folder_path: Path) -> List[np.ndarray]:
-    imgs = []
-    for img_path in natsorted(folder_path.glob("*.png")):
-        img = cv2.imread(str(img_path))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        imgs.append(img)
-    return imgs
-
-
-@hydra.main(version_base=None, config_path="conf", config_name="visualizer")
-def main(cfg: DictConfig):
-    set_seed(cfg.seed)
-    path = Path(cfg.map_path)
-
-    if cfg.map_type == "concept_nodes":
-        clip_ft = np.load(path / "clip_features.npy")
-        pcd_o3d = load_point_cloud(path)
-        imgs = load_imgs_from_folder(path / "object_viz")
-    elif cfg.map_type == "perpetua":
-        perpetua_map: PerpetuaObjectMap = PerpetuaObjectMap.load(path)
-        clip_ft = perpetua_map.semantic_tensor.numpy()
-        pcd_o3d = [obj.pcd for obj in perpetua_map]
-        imgs = [obj.segments[0].rgb for obj in perpetua_map]
-
-    ft_extractor = (
-        hydra.utils.instantiate(cfg.ft_extraction)
-        if hasattr(cfg, "ft_extraction")
-        else None
-    )
-
-    log.info(f"Loading map with a total of {len(pcd_o3d)} objects")
-
-    viser_server = ViserServer(
-        pcd_o3d=pcd_o3d, clip_ft=clip_ft, ft_extractor=ft_extractor, imgs=imgs
-    )
-    viser_server.start()
-    while True:
-        if viser_server.query_time is not None and cfg.map_type == "perpetua":
-            print(f"The old edges were: \n {perpetua_map.edges}")
-            perpetua_map.predict(viser_server.query_time)
-            print(f"The new edges are: \n {perpetua_map.edges}")
-            viser_server.query_time = None
-            viser_server.load_object_map(perpetua_map)
-
-
-if __name__ == "__main__":
-    main()

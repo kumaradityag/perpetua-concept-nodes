@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - /ft_extraction@ft_extractor: CLIP_H14
+
+_target_: concept_graphs.inference.toolbox.ObjectMapToolbox.ObjectMapToolbox
+map_path: ${map_path}

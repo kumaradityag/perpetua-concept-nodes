@@ -45,15 +45,6 @@ def set_seed(seed: int = 42) -> None:
     log.info(f"Random seed set as {seed}")
 
 
-def load_map(path: str) -> ObjectMap:
-    map = pickle.load(open(path, "rb"))
-
-    for obj in map:
-        obj.pcd_to_o3d()
-
-    return map
-
-
 def split_camel_preserve_acronyms(name):
     # Insert space between lowercase → uppercase
     # OR between acronym → normal word
