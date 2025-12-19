@@ -18,7 +18,12 @@ class ObjectMapToolbox:
         self.ft_extractor = ft_extractor
         self.device = ft_extractor.device
         self.semantic_sim = CosineSimilarity01()
-        self.object_map = ObjectMap.load(map_path)
+        self.object_map: ObjectMap = self.load_object_map(map_path)
+
+    def load_object_map(self, map_path: str = None):
+        object_map = ObjectMap.load(map_path)
+        object_map.to(self.device)
+        return object_map
 
     def update_object_map(self, object_map):
         self.object_map = object_map
@@ -26,7 +31,6 @@ class ObjectMapToolbox:
         self.reset()
 
     def reset(self):
-        # Add here any additional reset logic if needed
         pass
 
     def clip_query(self, query: str) -> torch.Tensor:

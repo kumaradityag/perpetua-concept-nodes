@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from scipy.spatial.transform import Rotation as Rsc
 import numpy as np
 import viser
@@ -85,27 +85,33 @@ class ObjectMapServer:
             )
             self.clip_gui_button.on_click(self.on_clip_query_submit)
 
-        # Initialize scene
-        self.update_object_map(self.object_map)
+        self._update_server_state()
 
     @property
     def object_map(self) -> ObjectMap:
         return self.toolbox.object_map
 
-    # Server state updates
     def update_object_map(self, object_map: ObjectMap):
         self.toolbox.update_object_map(object_map)
+        self._update_server_state()
+
+    def _update_server_state(self):
         rng = np.random.default_rng(42)
-        self.segmentation_colors = rng.random((len(object_map), 3))
+        self.segmentation_colors = rng.random((len(self.object_map), 3))
         self.reset()
 
     def reset(self):
         self.server.scene.reset()
         self.obj_counter_gui_button.value = len(self.object_map)
-        self.clear_main_objects()
-        self.clear_centroids()
-        self.clear_boxes()
-        self.clear_labels()
+        self.pcd_centroid_gui_checkbox.value = False
+        self.pcd_boxes_gui_checkbox.value = False
+        self.pcd_labels_gui_checkbox.value = False
+        self.hitbox_handles = []
+        self.object_handles = []
+        self.centroid_handles = []
+        self.box_handles = []
+        self.label_handles = []
+        self.current_image_handle = None
         self.display_object_rgb()
 
     def spin(self):
@@ -212,7 +218,8 @@ class ObjectMapServer:
                 color=(255, 255, 255),
                 opacity=0.0,
             )
-            hitbox_handle.on_click(lambda _, idx=i: self.on_object_clicked(idx))
+            id = obj.name if obj.name is not None else i
+            hitbox_handle.on_click(lambda _, idx=id: self.on_object_clicked(idx))
 
             self.hitbox_handles.append(hitbox_handle)
             self.object_handles.append(handle)
@@ -230,7 +237,6 @@ class ObjectMapServer:
                 radius=0.03,
                 position=centroid,
             )
-            sphere.on_click(lambda _, idx=i: self.on_object_clicked(idx))
             self.centroid_handles.append(sphere)
 
     def display_boxes(self):
@@ -269,7 +275,7 @@ class ObjectMapServer:
             )
             self.label_handles.append(label_handle)
 
-    def on_object_clicked(self, index: int):
+    def on_object_clicked(self, index: Union[int, str]):
         """Callback to display the image associated with the clicked object."""
         self.clear_image()
 

@@ -1,2 +1,6 @@
-_target_: concept_graphs.mapping.PerpetuaObjectMap.PerpetuaObjectMap.load
-path: ${map_path}
+# @package _global_
+defaults:
+  - /inference/toolbox@toolbox: PerpetuaMapToolbox
+
+_target_: concept_graphs.viz.server.PerpetuaMapServer.PerpetuaMapServer
+point_shape: circle

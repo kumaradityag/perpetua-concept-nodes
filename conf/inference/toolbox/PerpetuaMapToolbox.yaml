@@ -1,2 +1,6 @@
-_target_: concept_graphs.mapping.PerpetuaObjectMap.PerpetuaObjectMap.load
-path: ${map_path}
+# @package _global_
+defaults:
+  - /ft_extraction@ft_extractor: CLIP_H14
+
+_target_: concept_graphs.inference.toolbox.PerpetuaMapToolbox.PerpetuaMapToolbox
+map_path: ${map_path}

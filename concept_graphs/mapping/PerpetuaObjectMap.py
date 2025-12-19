@@ -187,9 +187,9 @@ class PerpetuaObjectMap:
             obj.pcd_to_o3d()
 
     @classmethod
-    def load(cls, path: Path) -> Self:
+    def load(cls, path: str) -> Self:
         log.info(f"Loading PerpetuaObjectMap from {path}")
-        map_file = path / "perpetua_map.pkl"
+        map_file = Path(path) / "perpetua_map.pkl"
         with open(map_file, "rb") as f:
             loaded_map: Self = pickle.load(f)
 
@@ -280,3 +280,14 @@ class PerpetuaObjectMap:
             [center_x, center_y, min_z], dtype=np.float32
         )  # z axis is flipped in these scenes
         return target - receptacle.centroid
+
+    def to(self, device: str):
+        self.device = device
+        if self.semantic_tensor is not None:
+            self.semantic_tensor = self.semantic_tensor.to(device)
+        if self.centroid_tensor is not None:
+            self.centroid_tensor = self.centroid_tensor.to(device)
+        if self.pcd_tensors is not None:
+            self.pcd_tensors = [p.to(device) for p in self.pcd_tensors]
+        if self.vertices_tensor is not None:
+            self.vertices_tensor = self.vertices_tensor.to(device)
