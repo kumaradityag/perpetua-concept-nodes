@@ -21,6 +21,7 @@ class PerpetuaMapServer(ObjectMapServer):
         self.selected_object_id = None
 
         self.object_names = self.object_map.get_pickupables_name()
+        self.vector_handles = []
 
         # GUI
         with self.server.gui.add_folder("Temporal Queries"):
@@ -28,6 +29,14 @@ class PerpetuaMapServer(ObjectMapServer):
                 "Map Time (hours)",
                 initial_value=0,
                 disabled=True,
+            )
+            self.debug_vectors_gui_checkbox = self.server.gui.add_checkbox(
+                "Debug Vectors",
+                initial_value=False,
+                disabled=False,
+            )
+            self.debug_vectors_gui_checkbox.on_update(
+                self.on_debug_vectors_checkbox_update
             )
             with self.server.gui.add_folder("Map"):
                 self.map_time_gui_number = self.server.gui.add_number(
@@ -79,7 +88,9 @@ class PerpetuaMapServer(ObjectMapServer):
                 self.selected_object_id, self.object_query_time
             )
             # self._update_server_state()
-            self.display_query_object(self.selected_object_id, color=np.array([255, 0, 255]))
+            self.display_query_object(
+                self.selected_object_id, color=np.array([255, 0, 255])
+            )
             self.object_query_time = None
             self.selected_object_id = None
 
@@ -90,9 +101,37 @@ class PerpetuaMapServer(ObjectMapServer):
         self.object_query_time = self.object_time_gui_number.value
         self.selected_object_id = self.object_dropdown.value
 
+    def on_debug_vectors_checkbox_update(self, data):
+        debug_vectors = self.debug_vectors_gui_checkbox.value
+        if debug_vectors:
+            self.display_canonical_vectors()
+        else:
+            self.clear_canonical_vectors()
+
     def on_map_time_reset_click(self, data):
         # TODO: implement me
         pass
+
+    # Scene clearing methods
+    def clear_canonical_vectors(self):
+        for vector in self.vector_handles:
+            vector.remove()
+        self.vector_handles = []
+
+    def display_canonical_vectors(self):
+        self.clear_canonical_vectors()
+        vectors_dict = self.toolbox.build_canonical_vectors()
+        for r_name, vectors in vectors_dict.items():
+            for i, offset in enumerate(vectors):
+                start_point = self.object_map.get_receptacle(r_name).centroid
+                end_point = start_point + offset
+                line = self.server.scene.add_line_segments(
+                    name=f"vectors/{r_name}_{i}",
+                    points=np.array([[start_point, end_point]]),
+                    colors=np.array([[[255, 0, 0], [0, 255, 0]]]),
+                    line_width=4.0,
+                )
+                self.vector_handles.append(line)
 
     def display_query_object(self, name: str, color: Optional[List[int]] = None):
         obj = self.object_map.get_pickupable(name)

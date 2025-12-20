@@ -36,5 +36,13 @@ class PerpetuaMapToolbox(ObjectMapToolbox):
         self.object_map.object_predict(object_id, query_time)
         self.object_map.refresh_state()
 
+    # This is a debug method to visualize the canonical vectors
+    def build_canonical_vectors(self):
+        vectors_dict = {}
+        for r_name, receptacle in self.object_map._receptacles.items():
+            # All receptacles are assumed to have canonical vectors
+            vectors_dict[r_name] = receptacle.canonical_pos_vectors
+        return vectors_dict
+
         
 
