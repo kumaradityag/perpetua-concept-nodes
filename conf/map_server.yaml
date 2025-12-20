@@ -4,7 +4,7 @@ defaults:
   - paths: paths
   - _self_
 
-# map_path: ${output_dir}/semistaticsim_run_503_cg-detector_2025-12-18-00-06-43.513458
+# map_path: ${output_dir}/semistaticsim_run_0_cg-detector_2025-12-20-14-16-10.420183
 map_path: ${data_dir}/perpetua_map
 device: cuda
 seed: 42

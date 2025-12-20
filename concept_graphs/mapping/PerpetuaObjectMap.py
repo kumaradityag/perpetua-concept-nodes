@@ -273,12 +273,12 @@ class PerpetuaObjectMap:
         max_x = vertices[:, 0].max()
         min_y = vertices[:, 1].min()
         max_y = vertices[:, 1].max()
-        min_z = vertices[:, 2].min()
+        min_z = vertices[:, 2].max()
         center_x = 0.5 * (min_x + max_x)
         center_y = 0.5 * (min_y + max_y)
         target = np.array(
             [center_x, center_y, min_z], dtype=np.float32
-        )  # z axis is flipped in these scenes
+        )
         return target - receptacle.centroid
 
     def downsample_objects(self, voxel_size: float = None):

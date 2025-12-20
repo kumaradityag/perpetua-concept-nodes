@@ -8,6 +8,9 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
+# Disable GPU memory pre-allocation to avoid OOM
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+import jax
 
 from concept_graphs.utils import set_seed
 from concept_graphs.mapping.utils import test_unique_segments

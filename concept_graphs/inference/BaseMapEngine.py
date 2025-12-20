@@ -116,13 +116,12 @@ class BaseMapEngine:
 
     def _load_estimator(self, pickupable_name: str):
         "Load the Perpetua estimator for a given pickupable object."
-        est_path = self.perpetua_estimators_path / f"{pickupable_name}_object.pkl"
+        est_path = self.perpetua_estimators_path / f"{pickupable_name.replace("|", "_")}_object.pkl"
         try:
             with open(est_path, "rb") as f:
                 return pickle.load(f)
         except Exception as e:
-            log.error(f"Error loading estimator for {pickupable_name}: {e}")
-            return None
+            raise RuntimeError(f"Error loading estimator: {e}")
 
     def _build_edges(
         self,
