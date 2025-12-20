@@ -14,7 +14,6 @@ from concept_graphs.mapping.similarity.semantic import CosineSimilarity01
 from concept_graphs.perception.ft_extraction.FeatureExtractor import FeatureExtractor
 from concept_graphs.utils import load_point_cloud
 
-from concept_graphs.utils import load_map
 from concept_graphs.mapping.ObjectMap import ObjectMap
 from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
 
@@ -32,15 +31,18 @@ class BaseMapEngine:
         semantic_sim_metric: CosineSimilarity01,
         device: str = "cuda",
     ):
+        # Paths
         self.map_path = Path(map_path)
         self.perpetua_estimators_path = Path(perpetua_estimators_path)
         self.perpetua_map_path = Path(perpetua_map_path)
         self.perpetua_map_path.mkdir(parents=True, exist_ok=True)
         self.perpetua_map_full_overwrite = perpetua_map_full_overwrite
 
+        # Components
         self.ft_extractor = ft_extractor
         self.semantic_sim = semantic_sim_metric
 
+        # Load object map
         self.annotations = self._load_annotations()
         self.features = self._load_features()
         self.pcd = self._load_point_clouds()

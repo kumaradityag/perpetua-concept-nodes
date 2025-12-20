@@ -5,7 +5,6 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig
 
-from concept_graphs.utils import load_map
 from concept_graphs.mapping.ObjectMap import ObjectMap
 from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
 
@@ -50,7 +49,7 @@ def main(cfg: DictConfig):
 
     # Update Perpetua Map
     pickupable_map_ids, receptacle_map_ids = engine.get_map_object_ids()
-    concept_nodes_map: ObjectMap = load_map(concept_nodes_map_path / "map.pkl")
+    concept_nodes_map = ObjectMap.load(concept_nodes_map_path)
     current_p2r_mapping = engine.parse_assignments(results, pickupable_names)
 
     perpetua_map: PerpetuaObjectMap = engine.update_perpetua_map(
@@ -64,8 +63,11 @@ def main(cfg: DictConfig):
     )
 
     if cfg.debug:
+        # Clean a bit of memory before visualization
+        del perpetua_map
+        del concept_nodes_map
         log.info("Visualizing map objects...")
-        engine.visualize(output_path)
+        engine.visualize(concept_nodes_map_path, output_path)
 
 
 if __name__ == "__main__":

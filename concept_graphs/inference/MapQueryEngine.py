@@ -3,7 +3,7 @@ import shutil
 import os
 import glob
 from natsort import natsorted
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import numpy as np
 import json
 
@@ -12,6 +12,7 @@ from tqdm import tqdm
 import open3d as o3d
 
 from concept_graphs.vlm.OpenAIVerifier import OpenAIVerifier
+from concept_graphs.mapping.ObjectMap import ObjectMap
 from concept_graphs.utils import split_camel_preserve_acronyms, aabb_iou
 
 from .BaseMapEngine import BaseMapEngine
@@ -353,84 +354,21 @@ class QueryObjects(BaseMapEngine):
         with open(output_path / "query_results.json", "w") as f:
             json.dump(results, f, indent=4)
 
-    def visualize(self, res_path: str):
+    def visualize(self, object_map_path: str, results: Dict):
         """Visualize all object point clouds with labels using O3DVisualizer."""
-        import open3d.visualization.gui as gui
+        from concept_graphs.inference.toolbox.ObjectMapToolbox import ObjectMapToolbox
+        from concept_graphs.viz.server.VerifierServer import VerifierServer
 
-        # 1. Initialize Application and Visualizer
-        app = gui.Application.instance
-        app.initialize()
-
-        vis = o3d.visualization.O3DVisualizer("Map Objects Visualization", 1024, 768)
-        vis.set_background([1.0, 1.0, 1.0, 1.0], bg_image=None)
-        vis.show_settings = True
-        vis.show_skybox(False)
-        vis.enable_raw_mode(True)
-
-        # 2. Add Point Clouds
-        for i, pcd in enumerate(self.pcd):
-            vis.add_geometry(f"pcd_{i}", pcd)
-
-        # 3. Load Results
-        with open(res_path / "query_results.json", "r") as f:
-            results = json.load(f)
-
-        # 3. Add Receptacles (From ground truth)
-        for r_name, r_data in self.receptacles_bbox.items():
-
-            # A. Extract the corners and convert to numpy array
-            corners = np.array(r_data["cornerPoints"], dtype=np.float64)
-
-            # create_from_points computes the tightest box around these 8 points
-            bbox = o3d.geometry.OrientedBoundingBox.create_from_points(
-                o3d.utility.Vector3dVector(corners)
-            )
-
-            bbox.color = [0, 0, 1]
-
-            vis.add_geometry(f"gt_receptacle_{r_name}", bbox)
-            vis.add_3d_label(bbox.get_center(), f" {r_name} ")
-
-        # --- Pre-processing: Group names by map_id ---
-        id_to_names = {}
-        for r_name, map_id in self.receptacle_map_ids.items():
-            if map_id is None:
-                continue
-            if map_id not in id_to_names:
-                id_to_names[map_id] = []
-            id_to_names[map_id].append(r_name)
-
-        # 4. Add Receptacles (with Labels)
-        for map_id, name_list in id_to_names.items():
-            bbox = self.bbox[map_id]
-            bbox.color = [0, 0, 0]
-
-            # Add Geometry only once per ID - happens if a receptacle has multiple names
-            vis.add_geometry(f"receptacle_{map_id}", bbox)
-
-            # Combine names into one string
-            combined_label = "\n".join(name_list)
-
-            # Add the combined label (if it exists)
-            vis.add_3d_label(bbox.get_center(), combined_label)
-
-        # 5. Add Pickupables (with Labels)
-        for p_name, data in results.items():
-            if data["present"]:
-                p_id = data["map_object_id"]
-                bbox = self.bbox[p_id]
-                bbox.color = [1, 0, 0]
-
-                # Add Geometry
-                vis.add_geometry(f"pickup_{p_id}", bbox)
-
-                # Add Label
-                vis.add_3d_label(bbox.get_center(), f" {p_name} ")
-
-        # 6. Run Visualization
-        vis.reset_camera_to_default()
-        app.add_window(vis)
-        app.run()
+        toolbox = ObjectMapToolbox(object_map_path, self.ft_extractor)
+        server = VerifierServer(
+            self.pickupable_bbox,
+            self.receptacles_bbox,
+            self.receptacle_map_ids,
+            self.pickupable_existence,
+            results,
+            toolbox,
+        )
+        server.spin()
 
 
 class QueryObjectsGT(QueryObjects):
@@ -555,62 +493,3 @@ class QueryObjectsGT(QueryObjects):
             results[query_text] = result_entry
 
         return results
-
-    def visualize(self, res_path: str):
-        """Visualize all object point clouds with labels using O3DVisualizer."""
-        import open3d.visualization.gui as gui
-
-        # 1. Initialize Application and Visualizer
-        app = gui.Application.instance
-        app.initialize()
-
-        vis = o3d.visualization.O3DVisualizer("Map Objects Visualization", 1024, 768)
-        vis.set_background([1.0, 1.0, 1.0, 1.0], bg_image=None)
-        vis.show_settings = True
-        vis.show_skybox(False)
-        vis.enable_raw_mode(True)
-
-        # 2. Add Point Clouds
-        for i, pcd in enumerate(self.pcd):
-            vis.add_geometry(f"pcd_{i}", pcd)
-
-        # 3. Load Results
-        with open(res_path / "query_results.json", "r") as f:
-            results = json.load(f)
-
-        # 3. Add Receptacles (From ground truth)
-        for p_name, p_data in self.pickupable_bbox.items():
-
-            # A. Extract the corners and convert to numpy array
-            corners = np.array(p_data["cornerPoints"], dtype=np.float64)
-
-            # create_from_points computes the tightest box around these 8 points
-            bbox = o3d.geometry.OrientedBoundingBox.create_from_points(
-                o3d.utility.Vector3dVector(corners)
-            )
-
-            bbox.color = [0, 1, 0]
-
-            if self.pickupable_existence[p_name] == False:
-                bbox.color = [1, 0, 0]
-
-            vis.add_geometry(f"gt_pickupable_{p_name}", bbox)
-            vis.add_3d_label(bbox.get_center(), f" {p_name} ")
-
-        # 4. Add Pickupables (with Labels)
-        for p_name, data in results.items():
-            if data["present"]:
-                p_id = data["map_object_id"]
-                bbox = self.bbox[p_id]
-                bbox.color = [0, 0, 1]
-
-                # Add Geometry
-                vis.add_geometry(f"pickup_{p_id}", bbox)
-
-                # Add Label
-                vis.add_3d_label(bbox.get_center(), f" {p_name} ")
-
-        # 6. Run Visualization
-        vis.reset_camera_to_default()
-        app.add_window(vis)
-        app.run()
