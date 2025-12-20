@@ -32,5 +32,9 @@ class PerpetuaMapToolbox(ObjectMapToolbox):
         self.object_map.predict(query_time)
         self.object_map.refresh_state()
 
+    def temporal_object_query(self, object_id: str, query_time: float):
+        self.object_map.object_predict(object_id, query_time)
+        self.object_map.refresh_state()
+
         
 

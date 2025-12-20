@@ -57,6 +57,9 @@ class PerpetuaObjectMap:
     def __getitem__(self, item):
         return self.objects[item]
 
+    def get_pickupables_name(self) -> List[str]:
+        return list(self._pickupables.keys())
+
     def has_object(self, name: str) -> bool:
         return name in self.objects
 
@@ -122,7 +125,10 @@ class PerpetuaObjectMap:
         attached = {}
         for receptacle_name, pickupables in edges.items():
             for pickupable_name in pickupables:
-                if pickupable_name in self._pickupables and receptacle_name in self._receptacles:
+                if (
+                    pickupable_name in self._pickupables
+                    and receptacle_name in self._receptacles
+                ):
                     attached[pickupable_name] = receptacle_name
         self.edges = edges
 
@@ -137,6 +143,7 @@ class PerpetuaObjectMap:
         self._refresh_geometry_cache()
 
     def predict(self, timestep: float, threshold: float = 0.5):
+        """Method to predict all pickupable locations at a given timestep."""
         if isinstance(timestep, float) or isinstance(timestep, int):
             timestep = jnp.array([timestep], dtype=jnp.float32)
 
@@ -145,17 +152,55 @@ class PerpetuaObjectMap:
 
         for name, pickupable in self._pickupables.items():
             if pickupable.estimator is None:
-                raise ValueError(f"Pickupable {name} does not have an associated estimator.")
+                raise ValueError(
+                    f"Pickupable {name} does not have an associated estimator."
+                )
             belief = pickupable.predict(timestep)
             index = jnp.argmax(belief).item()
-            receptacle_name = pickupable.receptacles[index] if belief[index] >= threshold else None
+            receptacle_name = (
+                pickupable.receptacles[index] if belief[index] >= threshold else None
+            )
             if receptacle_name is None or receptacle_name not in self._receptacles:
                 continue
             inferred_edges[receptacle_name].append(name)
 
         # FIXME: if predicting, this needs to be a temporal change, not an absolute set
         self.set_edges(inferred_edges)
-        self.time = timestep
+        self.time = timestep.item()
+
+    def object_predict(self, object_id: str, timestep: float, threshold: float = 0.5):
+        """Method to predict a single pickupable location at a given timestep."""
+        if isinstance(timestep, float) or isinstance(timestep, int):
+            timestep = jnp.array([timestep], dtype=jnp.float32)
+
+        pickupable = self.get_pickupable(object_id)
+        if pickupable.estimator is None:
+            raise ValueError(
+                f"Pickupable {object_id} does not have an associated estimator."
+            )
+        belief = pickupable.predict(timestep)
+        index = jnp.argmax(belief).item()
+        receptacle_name = (
+            pickupable.receptacles[index] if belief[index] >= threshold else None
+        )
+
+        # Update edges
+        # Remove from previous receptacle
+        for _, pickupables in self.edges.items():
+            if object_id in pickupables:
+                pickupables.remove(object_id)
+        # Add to new receptacle if valid
+        if receptacle_name is not None and receptacle_name in self._receptacles:
+            if receptacle_name not in self.edges:
+                self.edges[receptacle_name] = []
+            self.edges[receptacle_name].append(object_id)
+            pickupable.visibility = True
+            pickupable.move(receptacle_name)
+        else:
+            pickupable.visibility = False
+
+        self.time = timestep.item()
+        self._refresh_geometry_cache()
 
     def update_canonical_vectors(self, canonical_vectors: Dict[str, List[np.ndarray]]):
         for receptacle_name, vectors in canonical_vectors.items():
@@ -276,9 +321,7 @@ class PerpetuaObjectMap:
         min_z = vertices[:, 2].max()
         center_x = 0.5 * (min_x + max_x)
         center_y = 0.5 * (min_y + max_y)
-        target = np.array(
-            [center_x, center_y, min_z], dtype=np.float32
-        )
+        target = np.array([center_x, center_y, min_z], dtype=np.float32)
         return target - receptacle.centroid
 
     def downsample_objects(self, voxel_size: float = None):

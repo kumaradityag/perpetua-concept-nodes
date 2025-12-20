@@ -67,7 +67,7 @@ def main(cfg: DictConfig):
         del perpetua_map
         del concept_nodes_map
         log.info("Visualizing map objects...")
-        engine.visualize(concept_nodes_map_path, output_path)
+        engine.visualize(concept_nodes_map_path, results)
 
 
 if __name__ == "__main__":

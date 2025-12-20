@@ -114,7 +114,7 @@ class ObjectMapServer:
         self.centroid_handles = []
         self.box_handles = []
         self.label_handles = []
-        self.current_image_handle = None
+        self.clear_image()
         self.display_object_rgb()
 
     def spin(self):
@@ -191,7 +191,7 @@ class ObjectMapServer:
         self.clear_main_objects()
 
         for i, obj in enumerate(self.object_map):
-            name = f"object_{i}"
+            name = obj.name if obj.name is not None else i
             pcd = obj.pcd
             pcd_points = np.asarray(pcd.points)
             if colors is not None:
@@ -200,7 +200,7 @@ class ObjectMapServer:
                 # Original rgb color
                 pcd_colors = np.asarray(pcd.colors)
             handle = self.server.scene.add_point_cloud(
-                name,
+                f"objects/{name}",
                 pcd_points,
                 pcd_colors,
                 point_size=self.pcd_size_gui_slider.value,
@@ -212,15 +212,14 @@ class ObjectMapServer:
                 scalar_first=True
             )
             hitbox_handle = self.server.scene.add_box(
-                name=f"{name}_hitbox",
+                name=f"hitbox/{name}",
                 position=bbox.center,
                 dimensions=bbox.extent,
                 wxyz=wxyz,
                 color=(255, 255, 255),
                 opacity=0.0,
             )
-            id = obj.name if obj.name is not None else i
-            hitbox_handle.on_click(lambda _, idx=id: self.on_object_clicked(idx))
+            hitbox_handle.on_click(lambda _, idx=name: self.on_object_clicked(idx))
 
             self.hitbox_handles.append(hitbox_handle)
             self.object_handles.append(handle)
@@ -230,10 +229,10 @@ class ObjectMapServer:
         self.clear_centroids()
 
         for i, obj in enumerate(self.object_map):
-            name = f"centroid_{i}"
+            name = obj.name if obj.name is not None else i
             centroid = obj.centroid
             sphere = self.server.scene.add_icosphere(
-                name=name,
+                name=f"centroid/{name}",
                 color=(255, 0, 0),
                 radius=0.03,
                 position=centroid,
@@ -245,7 +244,7 @@ class ObjectMapServer:
         self.clear_boxes()
 
         for i, obj in enumerate(self.object_map):
-            box_name = f"box_{i}"
+            name = obj.name if obj.name is not None else i
             bbox = obj.pcd.get_oriented_bounding_box()
             center = bbox.center
             extent = bbox.extent
@@ -253,7 +252,7 @@ class ObjectMapServer:
             wxyz = Rsc.from_matrix(R).as_quat(scalar_first=True)
 
             box = self.server.scene.add_box(
-                name=box_name,
+                name=f"box/{name}",
                 color=(0, 1, 0),
                 dimensions=extent,
                 position=center,
@@ -266,11 +265,11 @@ class ObjectMapServer:
         self.clear_labels()
 
         for i, obj in enumerate(self.object_map):
-            name = f"label_{i}"
+            name = obj.name if obj.name is not None else i
             centroid = obj.centroid
             label_text = obj.name if obj.name is not None else f"Object {i}"
             label_handle = self.server.scene.add_label(
-                name=name,
+                name=f"label/{name}",
                 text=label_text,
                 position=centroid,
             )
@@ -315,3 +314,9 @@ class ObjectMapServer:
             sim_query = self.toolbox.clip_query(self.clip_query)
             self.display_object_similarity(sim_query)
             self.clip_query = ""
+
+    def _get_handle(self, handles_list: List, handle_name: str) -> dict:
+        for handle in handles_list:
+            if handle.name == handle_name:
+                return handle
+        return None
