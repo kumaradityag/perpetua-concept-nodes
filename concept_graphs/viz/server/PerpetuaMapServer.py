@@ -33,12 +33,14 @@ class PerpetuaMapServer(ObjectMapServer):
         super().reset()
         # Add extra reset logic if needed
 
-    def spin(self):
-        while True:
-            pass
+    # Register here all callbacks that are resource intenseful and need to be called in the main loop
+    def _callbacks(self):
+        super()._callbacks()
+        if self.query_time is not None:
+            self.toolbox.temporal_map_query(self.query_time)
+            self._update_server_state()
+            self.display_object_rgb()
+            self.query_time = None
 
     def on_time_query_submit(self, data):
-        query_time = self.time_gui_number.value
-        self.toolbox.temporal_map_query(query_time)
-        # self.update_object_map(self.object_map)
-        self._update_server_state()
+        self.query_time = self.time_gui_number.value

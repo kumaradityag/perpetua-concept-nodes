@@ -27,6 +27,9 @@ class ObjectMapServer:
         self.label_handles: List[viser.LabelHandle] = []
         self.current_image_handle: Optional[viser.GuiImageHandle] = None
 
+        # Containers
+        self.clip_query: str = ""
+
         # GUI
         with self.server.gui.add_folder("Point Cloud"):
             self.obj_counter_gui_button = self.server.gui.add_number(
@@ -116,12 +119,11 @@ class ObjectMapServer:
 
     def spin(self):
         while True:
-            pass
+            self._callbacks()
 
     # Gui callbacks and inputs
     def on_clip_query_submit(self, data):
-        sim_query = self.toolbox.clip_query(self.clip_gui_text.value)
-        self.display_object_similarity(sim_query)
+        self.clip_query = self.clip_gui_text.value
 
     def on_rgb_button_click(self, data):
         self.display_object_rgb()
@@ -306,3 +308,10 @@ class ObjectMapServer:
         self.display_object_point_clouds(
             colors=similarities_to_rgb(similarity_scores, cmap_name="viridis")
         )
+
+    # Register here all callbacks that are resource intenseful and need to be called in the main loop
+    def _callbacks(self):
+        if self.clip_query != "":
+            sim_query = self.toolbox.clip_query(self.clip_query)
+            self.display_object_similarity(sim_query)
+            self.clip_query = ""
