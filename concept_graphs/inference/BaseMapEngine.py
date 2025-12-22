@@ -116,7 +116,10 @@ class BaseMapEngine:
 
     def _load_estimator(self, pickupable_name: str):
         "Load the Perpetua estimator for a given pickupable object."
-        est_path = self.perpetua_estimators_path / f"{pickupable_name.replace("|", "_")}_object.pkl"
+        est_path = (
+            self.perpetua_estimators_path
+            / f"{pickupable_name.replace("|", "_")}_object.pkl"
+        )
         try:
             with open(est_path, "rb") as f:
                 return pickle.load(f)
@@ -243,7 +246,8 @@ class BaseMapEngine:
             # TODO: Add background objects to the perpetua map
             perpetua_map.update_canonical_vectors(canonical_vectors)
             initial_edges = self._build_edges(current_p2r_mapping, perpetua_map)
-            perpetua_map.set_edges(initial_edges, move_pickupables=True)
+            perpetua_map.set_edges(initial_edges, move_pickupables=False)
+            perpetua_map.set_initial_edges()
             perpetua_map.refresh_state()
 
         # TODO: Fix the path to be in cn_output

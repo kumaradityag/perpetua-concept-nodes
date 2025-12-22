@@ -43,6 +43,9 @@ class PerpetuaObjectMap:
         self.edges: Dict[str, List[str]] = {}
         self.state = MapState.INCOMPLETE
 
+        # Used for resetting to initial state
+        self.initial_edges: Dict[str, List[str]] = {}
+
         self.semantic_tensor: Optional[torch.Tensor] = None
         self.pcd_tensors: Optional[List[torch.Tensor]] = None
         self.vertices_tensor: Optional[torch.Tensor] = None
@@ -120,6 +123,12 @@ class PerpetuaObjectMap:
 
     def add_background(self, name: str, obj: Object) -> Object:
         return self._add_object(name, obj, ObjectType.BACKGROUND)
+
+    def set_initial_edges(self):
+        self.initial_edges = copy.deepcopy(self.edges)
+
+    def reset(self):
+        self.set_edges(self.initial_edges, move_pickupables=True)
 
     def set_edges(self, edges: Dict[str, List[str]], move_pickupables: bool = True):
         attached = {}
