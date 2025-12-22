@@ -43,7 +43,7 @@ class AutomaticMobileSAM(SegmentationModel):
         self.predictor = mask_generator(model=mobile_sam)
 
     def __call__(
-        self, img: np.ndarray
+        self, img: np.ndarray, **kwargs
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         anns = self.predictor.generate(img)
         masks, bbox, score = [], [], []

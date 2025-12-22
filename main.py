@@ -8,6 +8,7 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
+
 # Disable GPU memory pre-allocation to avoid OOM
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 import jax
@@ -47,7 +48,11 @@ def main(cfg: DictConfig):
 
     for obs in dataloader:
         segments = perception_pipeline(
-            obs["rgb"], obs["depth"], obs["intrinsics"], obs["camera_pose"]
+            obs["rgb"],
+            obs["depth"],
+            obs["intrinsics"],
+            obs["camera_pose"],
+            obs.get("semantics", None),
         )
 
         timestamp = obs.get("timestamp", None)

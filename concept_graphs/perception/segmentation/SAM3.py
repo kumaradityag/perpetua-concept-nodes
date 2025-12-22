@@ -110,7 +110,7 @@ class SAM3(SegmentationModel):
             prompts = f.read().splitlines()
         return prompts
 
-    def __call__(self, img: np.ndarray):
+    def __call__(self, img: np.ndarray, **kwargs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         self.counter = 0
         with torch.inference_mode(), torch.no_grad():
             pil_img = Image.fromarray(img)

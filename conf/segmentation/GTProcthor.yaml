@@ -1,0 +1,4 @@
+_target_: concept_graphs.perception.segmentation.GTProcthor.GTProcthor
+id_to_color_path: ${data_dir}/${dataset.scene}/id_to_color.json
+classes_path: ${cache_dir}/procthor_classes.txt
+device: ${device}

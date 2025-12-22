@@ -63,7 +63,7 @@ class YoloMobileSAM(SegmentationModel):
             os.makedirs(self.debug_dir / "detections", exist_ok=True)
 
     def __call__(
-        self, img: np.ndarray
+        self, img: np.ndarray, **kwargs
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         with torch.inference_mode():
             img_bgr = img[..., ::-1].copy()

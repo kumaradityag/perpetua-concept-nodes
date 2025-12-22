@@ -69,7 +69,7 @@ class GridMobileSAM(SegmentationModel):
         self.labels = torch.ones(grid_width * grid_height, 1).to(self.device)
 
     def __call__(
-        self, img: np.ndarray
+        self, img: np.ndarray, **kwargs
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         self.predictor.set_image(img)
         masks, iou_predictions, _ = self.predictor.predict_torch(

@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 import torch
 import numpy as np
@@ -7,7 +7,7 @@ import numpy as np
 class SegmentationModel:
 
     def __call__(
-        self, img: np.ndarray
+        self, img: np.ndarray, semantincs: Optional[np.ndarray] = None
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
 
@@ -15,6 +15,8 @@ class SegmentationModel:
         ----------
         img: np.ndarray
            Unprocessed uint8 RGB image of size (H, W, 3).
+        semantics: Optional[np.ndarray]
+           GT segmentation if available.
 
         Returns
         -------

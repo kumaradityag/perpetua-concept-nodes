@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 import torch
 import numpy as np
 from pathlib import Path
@@ -51,9 +51,9 @@ class PerceptionPipeline:
             os.makedirs(self.debug_dir / "segments", exist_ok=True)
 
     def __call__(
-        self, rgb: np.ndarray, depth: np.ndarray, intrinsics: np.ndarray, camera_pose: np.ndarray,
+        self, rgb: np.ndarray, depth: np.ndarray, intrinsics: np.ndarray, camera_pose: np.ndarray, semantics: Optional[np.ndarray] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray]]]:
-        object_masks, bbox, conf, labels = self.segmentation_model(rgb)
+        object_masks, bbox, conf, labels = self.segmentation_model(rgb, semantics=semantics)
 
         if object_masks is None or bbox is None or conf is None or labels is None:
             return None

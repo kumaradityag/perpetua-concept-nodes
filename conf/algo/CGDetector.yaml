@@ -2,11 +2,13 @@
 defaults:
   - base
   - /ft_extraction: CLIP_H14
-  - override /segmentation: SAM3
+  # - override /segmentation: SAM3
+  # - override /segmentation: YoloMobileSAM
+  - override /segmentation: GTProcthor
   - _self_
 
 name: cg-detector
-sim_thresh: 0.90
+sim_thresh: 0.85
 overlap_eps: 0.025
 voxel_size: 0.025
 denoising_eps: 0.1
@@ -22,7 +24,7 @@ mapping:
       agg: dice
   n_min_segments: 3
   grace_min_segments: 30
-  filter_min_every: 10
+  filter_min_every: 500
   self_merge_every: 5
   downsample_every: 5
   denoise_every: -1
