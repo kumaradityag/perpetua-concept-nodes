@@ -3,7 +3,7 @@ import shutil
 import os
 import glob
 from natsort import natsorted
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import numpy as np
 import json
 
@@ -16,6 +16,8 @@ from concept_graphs.mapping.ObjectMap import ObjectMap
 from concept_graphs.utils import split_camel_preserve_acronyms, aabb_iou
 
 from .BaseMapEngine import BaseMapEngine
+
+from scipy.optimize import linear_sum_assignment
 
 log = logging.getLogger(__name__)
 
@@ -56,37 +58,124 @@ class QueryObjects(BaseMapEngine):
             result[r_name] = aabb
         return result
 
-    def get_receptacle_map_ids(self) -> Dict[str, int]:
-        """
-        For each receptacle OOBB (given as 8 corner points), find the map
-        object id whose bounding box has the highest IoU with it.
-        """
-        # self.receptacles_bbox[receptacle_key]["cornerPoints"] is a list of 8 points
+    def _canonical_receptacle_key(self, key: str) -> str:
+        # Anything before ___ is the "physical object id"
+        return key.split("___", 1)[0]
 
-        receptacle_to_map: Dict[str, int] = {}
+    def get_receptacle_map_ids(self) -> Dict[str, Optional[int]]:
+        """
+        Assign each receptacle to a map bbox index.
+        """
 
-        for receptacle_key, rec_data in self.receptacles_bbox.items():
-            if receptacle_key == "OOB_FAKE_RECEPTACLE":
-                receptacle_to_map[receptacle_key] = None
+        BREAKAWAY_MARGIN = (
+            0.05  # how much better IoU must be to switch away from group assignment
+        )
+
+        receptacle_to_map: Dict[str, Optional[int]] = {}
+
+        # Collect receptacles (skip fake)
+        receptacle_keys = [
+            k for k in self.receptacles_bbox.keys() if k != "OOB_FAKE_RECEPTACLE"
+        ]
+        receptacle_to_map["OOB_FAKE_RECEPTACLE"] = None
+
+        # Precompute receptacle corners
+        rec_corners_list: List[np.ndarray] = []
+        for k in receptacle_keys:
+            rec_corners = np.array(
+                self.receptacles_bbox[k]["cornerPoints"], dtype=np.float32
+            )
+            rec_corners_list.append(rec_corners)
+
+        # Precompute bbox corners
+        bbox_corners_list: List[np.ndarray] = [
+            np.asarray(b.get_box_points(), dtype=np.float32) for b in self.bbox
+        ]
+
+        R = len(receptacle_keys)
+        B = len(bbox_corners_list)
+
+        # IoU matrix: (R x B)
+        iou_rb = np.zeros((R, B), dtype=np.float32)
+        for i in range(R):
+            rc = rec_corners_list[i]
+            for j in range(B):
+                iou_rb[i, j] = aabb_iou(rc, bbox_corners_list[j])
+
+        # Group receptacles by canonical key
+        canon_to_indices: Dict[str, List[int]] = {}
+        for i, k in enumerate(receptacle_keys):
+            ck = self._canonical_receptacle_key(k)
+            canon_to_indices.setdefault(ck, []).append(i)
+
+        canon_keys = list(canon_to_indices.keys())
+        G = len(canon_keys)
+
+        # Score matrix for groups vs bboxes: take best IoU among members of the group
+        score_gb = np.zeros((G, B), dtype=np.float32)
+        for gi, ck in enumerate(canon_keys):
+            idxs = canon_to_indices[ck]
+            score_gb[gi, :] = np.max(iou_rb[idxs, :], axis=0)
+
+        # Allow "unassigned" by adding dummy columns
+        n_cols = max(B, G)
+        cost = np.ones(
+            (G, n_cols), dtype=np.float32
+        )  # default is dummy columns (score 0 => cost 1)
+        cost[:, :B] = 1.0 - score_gb
+
+        # Solve assignment
+        assignment: List[Tuple[int, int]] = []
+
+        row_ind, col_ind = linear_sum_assignment(cost)
+        assignment = list(zip(row_ind.tolist(), col_ind.tolist()))
+
+        # Determine each canonical group's primary bbox, and mark bbox "ownership"
+        # Ownership constraint: a bbox can be owned by at most one canonical group.
+        bbox_owner: Dict[int, str] = {}
+        canon_primary_bbox: Dict[str, Optional[int]] = {}
+
+        for gi, cj in assignment:
+            ck = canon_keys[gi]
+            if cj >= B:
+                canon_primary_bbox[ck] = None
                 continue
-            corner_points = rec_data["cornerPoints"]
+            # If score is basically zero, treat as unassigned
+            if score_gb[gi, cj] < 1e-3:
+                canon_primary_bbox[ck] = None
+                continue
+            canon_primary_bbox[ck] = cj
+            bbox_owner[cj] = ck
 
-            # corner_points is already a list of 8 [x, y, z] points
-            rec_corners = np.array(corner_points, dtype=np.float32)
+        # Initial per-receptacle mapping: everyone gets their group's primary bbox (may be None)
+        for i, k in enumerate(receptacle_keys):
+            ck = self._canonical_receptacle_key(k)
+            receptacle_to_map[k] = canon_primary_bbox.get(ck, None)
 
-            best_iou = 0.0
-            best_idx: Optional[int] = None
+        # Refinement: allow a receptacle to switch to a different bbox if:
+        #  - it is clearly better (margin), and
+        #  - that bbox is not owned by another canonical group (or is owned by same group),
+        for i, k in enumerate(receptacle_keys):
+            ck = self._canonical_receptacle_key(k)
 
-            # Iterate over all map bboxes
-            for idx, bbox in enumerate(self.bbox):
-                # bbox is expected to be an Open3D OrientedBoundingBox
-                box_points = np.asarray(bbox.get_box_points(), dtype=np.float32)
-                iou = aabb_iou(rec_corners, box_points)
-                if iou > best_iou:
-                    best_iou = iou
-                    best_idx = idx
+            current = receptacle_to_map[k]
+            current_iou = iou_rb[i, current] if (current is not None) else 0.0
 
-            receptacle_to_map[receptacle_key] = best_idx
+            best_j = int(np.argmax(iou_rb[i, :]))
+            best_iou = float(iou_rb[i, best_j])
+
+            if best_iou < 1e-3:
+                continue
+
+            owner = bbox_owner.get(best_j, None)
+            if owner is not None and owner != ck:
+                # would steal from another canonical object group -> not allowed
+                continue
+
+            if (best_iou - current_iou) >= BREAKAWAY_MARGIN:
+                receptacle_to_map[k] = best_j
+                # claim it for this canonical group (safe because either unclaimed or same owner)
+                bbox_owner[best_j] = ck
 
         return receptacle_to_map
 
@@ -380,44 +469,81 @@ class QueryObjectsGT(QueryObjects):
 
         self.pickupable_map_ids = self.get_pickupable_map_ids()
 
-    def get_pickupable_map_ids(self) -> Dict[str, int]:
+    def get_pickupable_map_ids(self) -> Dict[str, Optional[int]]:
         """
-        For each pickupable OOBB (given as 8 corner points), find the map
-        object id whose bounding box has the highest IoU with it.
+        One-to-one assignment of pickupables -> map bbox indices using Hungarian matching (max IoU).
         """
+        pickupable_to_map: Dict[str, Optional[int]] = {}
 
-        pickupable_to_map: Dict[str, int] = {}
+        # 1) Keep only existing pickupables
+        p_keys_all = list(self.pickupable_bbox.keys())
+        p_keys = [k for k in p_keys_all if self.pickupable_existence[k]]
 
-        for p_key, p_data in self.pickupable_bbox.items():
+        # Assign None for non-existing upfront
+        for k in p_keys_all:
+            if not self.pickupable_existence[k]:
+                pickupable_to_map[k] = None
 
-            if self.pickupable_existence[p_key] == False:
+        # Early exit if no pickupables in the scene
+        if len(p_keys) == 0 or len(self.bbox) == 0:
+            for k in p_keys:
+                pickupable_to_map[k] = None
+            return pickupable_to_map
+
+        # 2) Exclude bboxes already claimed by receptacles
+        forbidden = {v for v in self.receptacle_map_ids.values() if v is not None}
+        allowed_bbox_indices = [j for j in range(len(self.bbox)) if j not in forbidden]
+
+        if len(allowed_bbox_indices) == 0:
+            for k in p_keys:
+                pickupable_to_map[k] = None
+            return pickupable_to_map
+
+        # 3) Build IoU matrix: (#pickupables x #allowed_bboxes)
+        P = len(p_keys)
+        A = len(allowed_bbox_indices)
+
+        # Precompute bbox corners for allowed bboxes
+        allowed_bbox_corners: List[np.ndarray] = []
+        for j in allowed_bbox_indices:
+            allowed_bbox_corners.append(
+                np.asarray(self.bbox[j].get_box_points(), dtype=np.float32)
+            )
+
+        iou_pa = np.zeros((P, A), dtype=np.float32)
+        for i, p_key in enumerate(p_keys):
+            p_corners = np.array(
+                self.pickupable_bbox[p_key]["cornerPoints"], dtype=np.float32
+            )
+            for a, box_pts in enumerate(allowed_bbox_corners):
+                iou_pa[i, a] = aabb_iou(p_corners, box_pts)
+
+        # 4) Hungarian solves min-cost; we want max IoU => cost = 1 - iou
+        # Add dummy columns so some pickupables can go unmatched.
+        n_cols = max(A, P)
+        cost = np.ones(
+            (P, n_cols), dtype=np.float32
+        )  # dummy columns => iou=0 => cost=1
+        cost[:, :A] = 1.0 - iou_pa
+
+        row_ind, col_ind = linear_sum_assignment(cost)
+
+        # 5) Decode assignment
+        for r, c in zip(row_ind, col_ind):
+            p_key = p_keys[r]
+            if c >= A:
+                # matched to dummy => no map id
                 pickupable_to_map[p_key] = None
                 continue
 
-            corner_points = p_data["cornerPoints"]
+            chosen_allowed_col = c
+            chosen_bbox_idx = allowed_bbox_indices[chosen_allowed_col]
+            chosen_iou = float(iou_pa[r, chosen_allowed_col])
 
-            # corner_points is already a list of 8 [x, y, z] points
-            rec_corners = np.array(corner_points, dtype=np.float32)
-
-            best_iou = 0.0
-            best_idx: Optional[int] = None
-
-            # Iterate over all map bboxes
-            for idx, bbox in enumerate(self.bbox):
-                # bbox is expected to be an Open3D OrientedBoundingBox
-                box_points = np.asarray(bbox.get_box_points(), dtype=np.float32)
-                iou = aabb_iou(rec_corners, box_points)
-                if iou > best_iou:
-                    best_iou = iou
-                    best_idx = idx
-
-            if best_idx in self.receptacle_map_ids.values():
-                log.warning(
-                    f"Pickupable '{p_key}' with best map ID {best_idx} actually maps to a receptacle. Skipping."
-                )
+            if chosen_iou < 1e-3:
                 pickupable_to_map[p_key] = None
             else:
-                pickupable_to_map[p_key] = best_idx
+                pickupable_to_map[p_key] = chosen_bbox_idx
 
         return pickupable_to_map
 
