@@ -41,6 +41,10 @@ def main(cfg: DictConfig):
 
     # Run Query Logic
     results = engine.process_queries(queries=pickupable_names)
+    if cfg.debug:
+        # Clean a bit of memory before visualization
+        log.info("Visualizing map objects...")
+        engine.visualize(concept_nodes_map_path, results)
 
     # Save Results
     output_path = concept_nodes_map_path / "assignments"

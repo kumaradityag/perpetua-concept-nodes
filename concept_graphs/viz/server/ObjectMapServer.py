@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 from scipy.spatial.transform import Rotation as Rsc
 import numpy as np
 import viser
@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from concept_graphs.viz.utils import similarities_to_rgb
 from concept_graphs.mapping.ObjectMap import ObjectMap
+from concept_graphs.mapping.Object import Object
 from concept_graphs.inference.toolbox.ObjectMapToolbox import ObjectMapToolbox
 
 import logging
@@ -20,11 +21,11 @@ class ObjectMapServer:
         self.toolbox = toolbox
 
         # Handles
-        self.object_handles: List[viser.PointCloudHandle] = []
-        self.hitbox_handles: List[viser.PointCloudHandle] = []
-        self.centroid_handles: List[viser.SphereHandle] = []
-        self.box_handles: List[viser.BoxHandle] = []
-        self.label_handles: List[viser.LabelHandle] = []
+        self.object_handles: Dict[str, viser.PointCloudHandle] = {}
+        self.hitbox_handles: Dict[str, viser.PointCloudHandle] = {}
+        self.centroid_handles: Dict[str, viser.SphereHandle] = {}
+        self.box_handles: Dict[str, viser.BoxHandle] = {}
+        self.label_handles: Dict[str, viser.LabelHandle] = {}
         self.current_image_handle: Optional[viser.GuiImageHandle] = None
 
         # Containers
@@ -104,16 +105,16 @@ class ObjectMapServer:
         self.reset()
 
     def reset(self):
-        self.server.scene.reset()
+        # self.server.scene.reset()
         self.obj_counter_gui_button.value = len(self.object_map)
         self.pcd_centroid_gui_checkbox.value = False
         self.pcd_boxes_gui_checkbox.value = False
         self.pcd_labels_gui_checkbox.value = False
-        self.hitbox_handles = []
-        self.object_handles = []
-        self.centroid_handles = []
-        self.box_handles = []
-        self.label_handles = []
+        # self.hitbox_handles = {}
+        # self.object_handles = {}
+        self.centroid_handles = {}
+        self.box_handles = {}
+        self.label_handles = {}
         self.clear_image()
         self.display_object_rgb()
 
@@ -155,31 +156,33 @@ class ObjectMapServer:
     def on_point_size_change(self, data):
         point_size = self.pcd_size_gui_slider.value
 
-        for handle in self.object_handles:
+        for handle in self.object_handles.values():
             handle.point_size = point_size
 
     # Scene clearing methods
     def clear_main_objects(self):
-        for hitbox, pcd in zip(self.hitbox_handles, self.object_handles):
+        for hitbox, pcd in zip(
+            self.hitbox_handles.values(), self.object_handles.values()
+        ):
             hitbox.remove()
             pcd.remove()
-        self.hitbox_handles = []
-        self.object_handles = []
+        self.hitbox_handles = {}
+        self.object_handles = {}
 
     def clear_centroids(self):
-        for sphere in self.centroid_handles:
+        for sphere in self.centroid_handles.values():
             sphere.remove()
-        self.centroid_handles = []
+        self.centroid_handles = {}
 
     def clear_boxes(self):
-        for box in self.box_handles:
+        for box in self.box_handles.values():
             box.remove()
-        self.box_handles = []
+        self.box_handles = {}
 
     def clear_labels(self):
-        for label in self.label_handles:
+        for label in self.label_handles.values():
             label.remove()
-        self.label_handles = []
+        self.label_handles = {}
 
     def clear_image(self):
         if self.current_image_handle is not None:
@@ -188,41 +191,58 @@ class ObjectMapServer:
 
     # Scene display methods
     def display_object_point_clouds(self, colors: np.ndarray = None):
-        self.clear_main_objects()
-
         for i, obj in enumerate(self.object_map):
             name = obj.name if obj.name is not None else i
+            obj_key = f"objects/{name}"
+            hit_key = f"hitbox/{name}"
+
             pcd = obj.pcd
             pcd_points = np.asarray(pcd.points)
+
+            # Color handling
             if colors is not None:
+                # Broadcast single color to all points
                 pcd_colors = np.tile(colors[i], (pcd_points.shape[0], 1))
             else:
-                # Original rgb color
                 pcd_colors = np.asarray(pcd.colors)
-            handle = self.server.scene.add_point_cloud(
-                f"objects/{name}",
-                pcd_points,
-                pcd_colors,
-                point_size=self.pcd_size_gui_slider.value,
-                point_shape=self.point_shape,
-            )
-            # Add invisible hitbox for clicking
-            bbox = obj.pcd.get_oriented_bounding_box()
+
+            bbox = pcd.get_oriented_bounding_box()
             wxyz = Rsc.from_matrix(np.array(bbox.R, copy=True)).as_quat(
                 scalar_first=True
             )
-            hitbox_handle = self.server.scene.add_box(
-                name=f"hitbox/{name}",
-                position=bbox.center,
-                dimensions=bbox.extent,
-                wxyz=wxyz,
-                color=(255, 255, 255),
-                opacity=0.0,
-            )
-            hitbox_handle.on_click(lambda _, idx=name: self.on_object_clicked(idx))
 
-            self.hitbox_handles.append(hitbox_handle)
-            self.object_handles.append(handle)
+            # If handles exist
+            if obj_key in self.object_handles:
+                # Update Point Cloud
+                self.object_handles[obj_key].points = pcd_points
+                self.object_handles[obj_key].colors = pcd_colors
+
+                # Update Hitbox
+                hit_handle = self.hitbox_handles[hit_key]
+                hit_handle.position = bbox.center
+                hit_handle.dimensions = bbox.extent.tolist()
+                hit_handle.wxyz = wxyz
+            else:
+                # Add Point Cloud
+                self.object_handles[obj_key] = self.server.scene.add_point_cloud(
+                    obj_key,
+                    pcd_points,
+                    pcd_colors,
+                    point_size=self.pcd_size_gui_slider.value,
+                    point_shape=self.point_shape,
+                )
+                # Add Hitbox
+                hitbox_handle = self.server.scene.add_box(
+                    name=hit_key,
+                    position=bbox.center,
+                    dimensions=bbox.extent,
+                    wxyz=wxyz,
+                    color=(255, 255, 255),
+                    opacity=0.0,
+                )
+                # Add Click Event
+                hitbox_handle.on_click(lambda _, idx=name: self.on_object_clicked(idx))
+                self.hitbox_handles[hit_key] = hitbox_handle
 
     def display_object_centroids(self):
         # Clear previous spheres
@@ -237,7 +257,7 @@ class ObjectMapServer:
                 radius=0.03,
                 position=centroid,
             )
-            self.centroid_handles.append(sphere)
+            self.centroid_handles[f"centroid/{name}"] = sphere
 
     def display_boxes(self):
         # Clear existing boxes
@@ -248,9 +268,9 @@ class ObjectMapServer:
             bbox = obj.pcd.get_oriented_bounding_box()
             center = bbox.center
             extent = bbox.extent
-            R = np.array(bbox.R, copy=True)
-            wxyz = Rsc.from_matrix(R).as_quat(scalar_first=True)
-
+            wxyz = Rsc.from_matrix(np.array(bbox.R, copy=True)).as_quat(
+                scalar_first=True
+            )
             box = self.server.scene.add_box(
                 name=f"box/{name}",
                 color=(0, 1, 0),
@@ -259,7 +279,7 @@ class ObjectMapServer:
                 wxyz=wxyz,
                 wireframe=True,
             )
-            self.box_handles.append(box)
+            self.box_handles[f"box/{name}"] = box
 
     def display_labels(self):
         self.clear_labels()
@@ -273,7 +293,7 @@ class ObjectMapServer:
                 text=label_text,
                 position=centroid,
             )
-            self.label_handles.append(label_handle)
+            self.label_handles[f"label/{name}"] = label_handle
 
     def on_object_clicked(self, index: Union[int, str]):
         """Callback to display the image associated with the clicked object."""
@@ -314,9 +334,3 @@ class ObjectMapServer:
             sim_query = self.toolbox.clip_query(self.clip_query)
             self.display_object_similarity(sim_query)
             self.clip_query = ""
-
-    def _get_handle(self, handles_list: List, handle_name: str) -> dict:
-        for handle in handles_list:
-            if handle.name == handle_name:
-                return handle
-        return None

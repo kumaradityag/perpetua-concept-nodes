@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from scipy.spatial.transform import Rotation as Rsc
 import numpy as np
 import viser
@@ -21,7 +21,7 @@ class PerpetuaMapServer(ObjectMapServer):
         self.selected_object_id = None
 
         self.object_names = self.object_map.get_pickupables_name()
-        self.vector_handles = []
+        self.vector_handles: Dict[str, viser.VectorHandle] = {}
 
         # GUI
         with self.server.gui.add_folder("Temporal Queries"):
@@ -72,6 +72,9 @@ class PerpetuaMapServer(ObjectMapServer):
         super().reset()
         if hasattr(self, "map_time_tracker_gui_number"):
             self.map_time_tracker_gui_number.value = self.object_map.time
+        if hasattr(self, "vector_handles"):
+            self.debug_vectors_gui_checkbox.value = False
+            self.clear_canonical_vectors()
 
     # Register here all callbacks that are resource intenseful and need to be called in the main loop
     def _callbacks(self):
@@ -87,7 +90,6 @@ class PerpetuaMapServer(ObjectMapServer):
             self.toolbox.temporal_object_query(
                 self.selected_object_id, self.object_query_time
             )
-            # self._update_server_state()
             self.display_query_object(
                 self.selected_object_id, color=np.array([255, 0, 255])
             )
@@ -114,9 +116,9 @@ class PerpetuaMapServer(ObjectMapServer):
 
     # Scene clearing methods
     def clear_canonical_vectors(self):
-        for vector in self.vector_handles:
+        for vector in self.vector_handles.values():
             vector.remove()
-        self.vector_handles = []
+        self.vector_handles = {}
 
     def display_canonical_vectors(self):
         self.clear_canonical_vectors()
@@ -131,16 +133,16 @@ class PerpetuaMapServer(ObjectMapServer):
                     colors=np.array([[[255, 0, 0], [0, 255, 0]]]),
                     line_width=4.0,
                 )
-                self.vector_handles.append(line)
+                self.vector_handles[f"vectors/{r_name}_{i}"] = line
 
     def display_query_object(self, name: str, color: Optional[List[int]] = None):
         obj = self.object_map.get_pickupable(name)
         # Get handles of object if they exist
-        object_handle = self._get_handle(self.object_handles, f"objects/{name}")
-        hitbox_handle = self._get_handle(self.hitbox_handles, f"hitbox/{name}")
-        centroid_handle = self._get_handle(self.centroid_handles, f"centroid/{name}")
-        box_handle = self._get_handle(self.box_handles, f"box/{name}")
-        label_handle = self._get_handle(self.label_handles, f"label/{name}")
+        object_handle = self.object_handles.get(f"objects/{name}", None)
+        hitbox_handle = self.hitbox_handles.get(f"hitbox/{name}", None)
+        centroid_handle = self.centroid_handles.get(f"centroid/{name}", None)
+        box_handle = self.box_handles.get(f"box/{name}", None)
+        label_handle = self.label_handles.get(f"label/{name}", None)
 
         # Common data
         points = np.asarray(obj.pcd.points)

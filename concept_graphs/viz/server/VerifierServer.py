@@ -43,14 +43,13 @@ class VerifierServer(ObjectMapServer):
         self.assignments = assignments
 
         # Handles
-        self.gt_receptacles_handles = []
-        self.gt_pickupables_handles = []
-        self.pickupables_handles = []
-        self.receptacles_handles = []
-        self.r2r_associations_handles = []
-        self.p2p_associations_handles = []
-        self.p2r_associations_handles = []
-
+        self.gt_receptacles_handles: Dict[str, viser.BoxHandle] = {}
+        self.gt_pickupables_handles: Dict[str, viser.BoxHandle] = {}
+        self.pickupables_handles: Dict[str, viser.BoxHandle] = {}
+        self.receptacles_handles: Dict[str, viser.BoxHandle] = {}
+        self.r2r_associations_handles: Dict[str, viser.LineHandle] = {}
+        self.p2p_associations_handles: Dict[str, viser.LineHandle] = {}
+        self.p2r_associations_handles: Dict[str, viser.LineHandle] = {}
         # GUI
         with self.server.gui.add_folder("Debugging"):
             with self.server.gui.add_folder("Structure (Receptacles)"):
@@ -155,39 +154,39 @@ class VerifierServer(ObjectMapServer):
 
     # Clearing functions
     def clear_gt_receptacles(self):
-        for bbox in self.gt_receptacles_handles:
+        for bbox in self.gt_receptacles_handles.values():
             bbox.remove()
-        self.gt_receptacles_handles = []
+        self.gt_receptacles_handles = {}
 
     def clear_gt_pickupables(self):
-        for bbox in self.gt_pickupables_handles:
+        for bbox in self.gt_pickupables_handles.values():
             bbox.remove()
-        self.gt_pickupables_handles = []
+        self.gt_pickupables_handles = {}
 
     def clear_pickupables(self):
-        for bbox in self.pickupables_handles:
+        for bbox in self.pickupables_handles.values():
             bbox.remove()
-        self.pickupables_handles = []
+        self.pickupables_handles = {}
 
     def clear_receptacles(self):
-        for bbox in self.receptacles_handles:
+        for bbox in self.receptacles_handles.values():
             bbox.remove()
-        self.receptacles_handles = []
+        self.receptacles_handles = {}
 
     def clear_r2r_associations(self):
-        for line in self.r2r_associations_handles:
+        for line in self.r2r_associations_handles.values():
             line.remove()
-        self.r2r_associations_handles = []
+        self.r2r_associations_handles = {}
 
     def clear_p2p_associations(self):
-        for line in self.p2p_associations_handles:
+        for line in self.p2p_associations_handles.values():
             line.remove()
-        self.p2p_associations_handles = []
+        self.p2p_associations_handles = {}
 
     def clear_p2r_associations(self):
-        for line in self.p2r_associations_handles:
+        for line in self.p2r_associations_handles.values():
             line.remove()
-        self.p2r_associations_handles = []
+        self.p2r_associations_handles = {}
 
     # Engine
     def _create_oobb_from_corners(
@@ -225,7 +224,7 @@ class VerifierServer(ObjectMapServer):
             box = self._create_oobb_from_corners(
                 corners, f"gt/{box_name}", color=COLORS["receptacle"]
             )
-            self.gt_receptacles_handles.append(box)
+            self.gt_receptacles_handles[f"gt/{box_name}"] = box
 
     def display_gt_pickupables(self):
         self.clear_gt_pickupables()
@@ -238,7 +237,7 @@ class VerifierServer(ObjectMapServer):
                 else COLORS["pickupable_absent"]
             )
             box = self._create_oobb_from_corners(corners, f"gt/{p_name}", color=color)
-            self.gt_pickupables_handles.append(box)
+            self.gt_pickupables_handles[f"gt/{p_name}"] = box
 
     def display_receptacles(self):
         self.clear_receptacles()
@@ -251,7 +250,7 @@ class VerifierServer(ObjectMapServer):
                 f"association/{r_name}",
                 color=COLORS["map_receptacle"],
             )
-            self.receptacles_handles.append(box)
+            self.receptacles_handles[f"association/{r_name}"] = box
 
     def display_pickupables(self):
         self.clear_pickupables()
@@ -264,7 +263,7 @@ class VerifierServer(ObjectMapServer):
                     f"association/{p_name}",
                     color=COLORS["map_pickupable"],
                 )
-                self.pickupables_handles.append(box)
+                self.pickupables_handles[f"association/{p_name}"] = box
 
     def display_r2r_associations(self):
         self.clear_r2r_associations()
@@ -284,7 +283,7 @@ class VerifierServer(ObjectMapServer):
                 colors=np.array([[COLORS["receptacle"], COLORS["map_receptacle"]]]),
                 line_width=4.0,
             )
-            self.r2r_associations_handles.append(line)
+            self.r2r_associations_handles[f"r2r/association/{r_name}_to_{map_id}"] = line
             # Add label
             midpoint = (gt_center + r_center) / 2
 
@@ -314,7 +313,7 @@ class VerifierServer(ObjectMapServer):
                     ),
                     line_width=4.0,
                 )
-                self.p2p_associations_handles.append(line)
+                self.p2p_associations_handles[f"p2p/association/{p_name}_to_{p_id}"] = line
                 # Add label
                 midpoint = (gt_center + p_center) / 2
 
@@ -346,7 +345,7 @@ class VerifierServer(ObjectMapServer):
                     ),
                     line_width=4.0,
                 )
-                self.p2r_associations_handles.append(line)
+                self.p2r_associations_handles[f"p2r/association/{p_name}_to_{r_name}"] = line
                 # Add label
                 midpoint = (p_center + r_center) / 2
 
