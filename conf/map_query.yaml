@@ -10,3 +10,4 @@ perpetua_map_path: ${data_dir}/perpetua_map
 perpetua_map_full_overwrite: true
 device: cuda
 debug: false
+seed: 42
