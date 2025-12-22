@@ -198,6 +198,7 @@ class ObjectMapServer:
 
             pcd = obj.pcd
             pcd_points = np.asarray(pcd.points)
+            visibility = obj.visibility
 
             # Color handling
             if colors is not None:
@@ -222,6 +223,7 @@ class ObjectMapServer:
                 hit_handle.position = bbox.center
                 hit_handle.dimensions = bbox.extent.tolist()
                 hit_handle.wxyz = wxyz
+                hit_handle.visible = visibility
             else:
                 # Add Point Cloud
                 self.object_handles[obj_key] = self.server.scene.add_point_cloud(
@@ -230,6 +232,7 @@ class ObjectMapServer:
                     pcd_colors,
                     point_size=self.pcd_size_gui_slider.value,
                     point_shape=self.point_shape,
+                    visible=visibility,
                 )
                 # Add Hitbox
                 hitbox_handle = self.server.scene.add_box(
@@ -239,6 +242,7 @@ class ObjectMapServer:
                     wxyz=wxyz,
                     color=(255, 255, 255),
                     opacity=0.0,
+                    visible=visibility,
                 )
                 # Add Click Event
                 hitbox_handle.on_click(lambda _, idx=name: self.on_object_clicked(idx))
@@ -256,6 +260,7 @@ class ObjectMapServer:
                 color=(255, 0, 0),
                 radius=0.03,
                 position=centroid,
+                visible=obj.visibility
             )
             self.centroid_handles[f"centroid/{name}"] = sphere
 
@@ -278,6 +283,7 @@ class ObjectMapServer:
                 position=center,
                 wxyz=wxyz,
                 wireframe=True,
+                visible=obj.visibility
             )
             self.box_handles[f"box/{name}"] = box
 
@@ -292,6 +298,7 @@ class ObjectMapServer:
                 name=f"label/{name}",
                 text=label_text,
                 position=centroid,
+                visible=obj.visibility
             )
             self.label_handles[f"label/{name}"] = label_handle
 

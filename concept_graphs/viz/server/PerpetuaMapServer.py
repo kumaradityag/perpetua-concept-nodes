@@ -152,11 +152,13 @@ class PerpetuaMapServer(ObjectMapServer):
         points = np.asarray(obj.pcd.points)
         bbox = obj.pcd.get_oriented_bounding_box()
         wxyz = Rsc.from_matrix(np.array(bbox.R, copy=True)).as_quat(scalar_first=True)
+        visibility = obj.visibility
 
         # Update object point cloud
         if object_handle:
             object_handle.points = points
             object_handle.colors = color
+            object_handle.visible = visibility
         else:
             obj_handle = self.server.scene.add_point_cloud(
                 f"objects/{name}",
@@ -164,6 +166,7 @@ class PerpetuaMapServer(ObjectMapServer):
                 color=color,
                 point_size=self.pcd_size_gui_slider.value,
                 point_shape=self.point_shape,
+                visible=visibility
             )
             self.object_handles.append(obj_handle)
         # Update hitbox position
@@ -171,6 +174,7 @@ class PerpetuaMapServer(ObjectMapServer):
             hitbox_handle.position = bbox.center
             hitbox_handle.dimensions = bbox.extent.tolist()
             hitbox_handle.wxyz = wxyz
+            hitbox_handle.visible = visibility
         else:
             hitbox = self.server.scene.add_box(
                 name=f"hitbox/{name}",
@@ -179,17 +183,21 @@ class PerpetuaMapServer(ObjectMapServer):
                 wxyz=wxyz,
                 color=(255, 255, 255),
                 opacity=0.0,
+                visible=visibility
             )
-            self.hitbox_handles.append(hitbox)
+            self.hitbox_handles[f"hitbox/{name}"] = hitbox
         # Update centroid if visible
         if centroid_handle:
             centroid_handle.position = obj.centroid
+            centroid_handle.visible = visibility
         # Update box if visible
         if box_handle:
             box_handle.position = bbox.center
             box_handle.dimensions = bbox.extent.tolist()
             box_handle.wxyz = wxyz
+            box_handle.visible = visibility
         # Update label if visible
         if label_handle:
             label_handle.position = obj.centroid
             label_handle.text = name
+            label_handle.visible = visibility
