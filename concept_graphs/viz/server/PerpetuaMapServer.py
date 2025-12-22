@@ -19,6 +19,7 @@ class PerpetuaMapServer(ObjectMapServer):
         self.map_query_time = None
         self.object_query_time = None
         self.selected_object_id = None
+        self.reset_edges = None
 
         self.object_names = self.object_map.get_pickupables_name()
         self.vector_handles: Dict[str, viser.VectorHandle] = {}
@@ -63,7 +64,7 @@ class PerpetuaMapServer(ObjectMapServer):
                 )
                 self.object_time_gui_button.on_click(self.on_object_time_query_submit)
             self.map_gui_reset_button = self.server.gui.add_button(
-                "Reset Map Time (TODO)",
+                "Reset Edges",
                 icon=viser.Icon.MOUSE,
             )
             self.map_gui_reset_button.on_click(self.on_map_time_reset_click)
@@ -83,7 +84,6 @@ class PerpetuaMapServer(ObjectMapServer):
         if self.map_query_time is not None:
             self.toolbox.temporal_map_query(self.map_query_time)
             self._update_server_state()
-            self.display_object_rgb()
             self.map_query_time = None
         # Object query
         if self.object_query_time is not None and self.selected_object_id is not None:
@@ -95,6 +95,11 @@ class PerpetuaMapServer(ObjectMapServer):
             )
             self.object_query_time = None
             self.selected_object_id = None
+        # Reset edges
+        if self.reset_edges:
+            self.toolbox.reset_temporal_edges()
+            self._update_server_state()
+            self.reset_edges = None
 
     def on_map_time_query_submit(self, data):
         self.map_query_time = self.map_time_gui_number.value
@@ -111,8 +116,7 @@ class PerpetuaMapServer(ObjectMapServer):
             self.clear_canonical_vectors()
 
     def on_map_time_reset_click(self, data):
-        # TODO: implement me
-        pass
+        self.reset_edges = self.map_gui_reset_button.value
 
     # Scene clearing methods
     def clear_canonical_vectors(self):

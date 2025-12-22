@@ -7,6 +7,7 @@ from concept_graphs.perception.ft_extraction.CLIP import CLIP
 
 log = logging.getLogger(__name__)
 
+
 class PerpetuaMapToolbox(ObjectMapToolbox):
     def __init__(
         self,
@@ -36,6 +37,9 @@ class PerpetuaMapToolbox(ObjectMapToolbox):
         self.object_map.object_predict(object_id, query_time)
         self.object_map.refresh_state()
 
+    def reset_temporal_edges(self):
+        self.object_map.reset()
+
     # This is a debug method to visualize the canonical vectors
     def build_canonical_vectors(self):
         vectors_dict = {}
@@ -43,6 +47,3 @@ class PerpetuaMapToolbox(ObjectMapToolbox):
             # All receptacles are assumed to have canonical vectors
             vectors_dict[r_name] = receptacle.canonical_pos_vectors
         return vectors_dict
-
-        
-

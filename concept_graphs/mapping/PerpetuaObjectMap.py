@@ -182,6 +182,7 @@ class PerpetuaObjectMap:
         if isinstance(timestep, float) or isinstance(timestep, int):
             timestep = jnp.array([timestep], dtype=jnp.float32)
 
+        new_edges = copy.deepcopy(self.edges)
         pickupable = self.get_pickupable(object_id)
         if pickupable.estimator is None:
             raise ValueError(
@@ -195,19 +196,20 @@ class PerpetuaObjectMap:
 
         # Update edges
         # Remove from previous receptacle
-        for _, pickupables in self.edges.items():
+        for _, pickupables in new_edges.items():
             if object_id in pickupables:
                 pickupables.remove(object_id)
         # Add to new receptacle if valid
         if receptacle_name is not None and receptacle_name in self._receptacles:
-            if receptacle_name not in self.edges:
-                self.edges[receptacle_name] = []
-            self.edges[receptacle_name].append(object_id)
+            if receptacle_name not in new_edges:
+                new_edges[receptacle_name] = []
+            new_edges[receptacle_name].append(object_id)
             pickupable.visibility = True
             pickupable.move(receptacle_name)
         else:
             pickupable.visibility = False
 
+        self.edges = new_edges
         self.time = timestep.item()
         self._refresh_geometry_cache()
 
