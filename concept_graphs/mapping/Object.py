@@ -239,7 +239,11 @@ class Object:
         noise_xy = np.random.uniform(-0.05, 0.05, size=2) * bbox_extent[:2]
         noise = np.array([noise_xy[0], noise_xy[1], 0.0])
         candidate_point = receptacle.centroid + vector + noise
-        target_point = np.clip(candidate_point, bbox_min, bbox_max)
+
+        # Clip only x/y; keep z as is
+        target_point = candidate_point.copy()
+        target_point[:2] = np.clip(candidate_point[:2], bbox_min[:2], bbox_max[:2])
+
         translation = target_point - self.centroid
 
         self.pcd.translate(translation)
