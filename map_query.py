@@ -1,9 +1,14 @@
-import logging
-import dill as pickle
 from pathlib import Path
+import os
+# Disable GPU memory pre-allocation to avoid OOM
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+import jax
+
+from concept_graphs.utils import set_seed
 
 import hydra
 from omegaconf import DictConfig
+import logging
 
 from concept_graphs.mapping.ObjectMap import ObjectMap
 from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
@@ -13,6 +18,7 @@ log = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="conf", config_name="map_query")
 def main(cfg: DictConfig):
+    set_seed(cfg.seed)
 
     # Instantiate hydra objects
     dataset = hydra.utils.instantiate(cfg.dataset)

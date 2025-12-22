@@ -229,14 +229,15 @@ class Object:
             raise RuntimeError("Object is not attached to a Perpetua map.")
 
         receptacle = self._perpetua_map.get_receptacle(receptacle_name)
-        # NOTE: currently only using the first canonical vector
-        # TODO: Sample among all canonical vectors
-        vector = receptacle.canonical_pos_vectors[0]
+        vector_id = np.random.choice(len(receptacle.canonical_pos_vectors))
+        vector = receptacle.canonical_pos_vectors[vector_id]
         bbox_min = receptacle.vertices.min(axis=0)
         bbox_max = receptacle.vertices.max(axis=0)
         bbox_extent = bbox_max - bbox_min
 
-        noise = np.random.uniform(-0.05, 0.05, size=3) * bbox_extent
+        # Just translate x-y with some noise
+        noise_xy = np.random.uniform(-0.05, 0.05, size=2) * bbox_extent[:2]
+        noise = np.array([noise_xy[0], noise_xy[1], 0.0])
         candidate_point = receptacle.centroid + vector + noise
         target_point = np.clip(candidate_point, bbox_min, bbox_max)
         translation = target_point - self.centroid

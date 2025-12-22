@@ -1,8 +1,13 @@
 from typing import Union
+import os
 import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 import logging
+# Disable GPU memory pre-allocation to avoid OOM
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+import jax
+
 from concept_graphs.utils import set_seed
 
 
