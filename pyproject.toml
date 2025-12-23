@@ -21,7 +21,10 @@ dependencies = [
     "pycocotools",
     "rgbd-dataset",
     "ipdb>=0.13.13",
-    "semistaticsim==0.4.5" #@git+https://github.com/Velythyl/SemiStaticSim.git@package"
+    "langchain",
+    "langchain-openai",
+    "viser",
+    "semistaticsim==0.4.8" #@git+https://github.com/Velythyl/SemiStaticSim.git@package"
 ]
 requires-python = ">=3.10"
 

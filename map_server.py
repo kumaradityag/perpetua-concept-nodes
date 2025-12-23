@@ -4,8 +4,15 @@ import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 import logging
+import os
+
+os.environ["JAX_PLATFORM_NAME"] = "cpu"
+
 # Disable GPU memory pre-allocation to avoid OOM
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+import jax
+
+jax.config.update("jax_platform_name", "cpu")
 import jax
 
 from concept_graphs.utils import set_seed

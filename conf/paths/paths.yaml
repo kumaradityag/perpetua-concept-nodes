@@ -1,6 +1,6 @@
 # @package _global_
-cache_dir:  /scratch/perpetua/cache_dir # Where to save model checkpoints and other assets
-data_dir: /scratch/perpetua/datasets/generated_data/semistaticsim/test/0/0/privileged
+cache_dir:  /Users/charlie/Projects/ppcg/cache_dir # Where to save model checkpoints and other assets
+data_dir: /Users/charlie/Projects/ppcg/generated_data/semistaticsim/test/0/0/privileged
 # output_dir: /scratch/perpetua/cn_output # Where to save outputs
-output_dir: /scratch/perpetua/kumar_cn_output # Where to save outputs
-estimators_dir: /scratch/perpetua/estimators/ # Where to load Perpetua estimators
+output_dir: /Users/charlie/Projects/ppcg/kumar_cn_output # Where to save outputs
+estimators_dir: /Users/charlie/Projects/ppcg/cache_dir/estimators/ # Where to load Perpetua estimators

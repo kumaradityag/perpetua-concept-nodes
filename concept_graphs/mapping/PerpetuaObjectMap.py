@@ -177,7 +177,7 @@ class PerpetuaObjectMap:
         self.set_edges(inferred_edges)
         self.time = timestep.item()
 
-    def object_predict(self, object_id: str, timestep: float, threshold: float = 0.5):
+    def object_predict(self, object_id: str, timestep: float, threshold: float = 0.5) -> Dict[str, float]:
         """Method to predict a single pickupable location at a given timestep."""
         if isinstance(timestep, float) or isinstance(timestep, int):
             timestep = jnp.array([timestep], dtype=jnp.float32)
@@ -212,6 +212,8 @@ class PerpetuaObjectMap:
         self.edges = new_edges
         self.time = timestep.item()
         self._refresh_geometry_cache()
+
+        return {s:b for b,s in zip(belief, pickupable.receptacles)}
 
     def update_canonical_vectors(self, canonical_vectors: Dict[str, List[np.ndarray]]):
         for receptacle_name, vectors in canonical_vectors.items():
