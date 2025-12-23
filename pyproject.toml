@@ -4,7 +4,8 @@ version = "0.0.0"
 dependencies = [
     "torch",
     "torchvision",
-    "jax[cuda12]>=0.6.2",
+    "jax-metal>=0.1.1 ; sys_platform == 'darwin'",
+    "jax[cuda12]>=0.8.1 ; sys_platform == 'linux'",
     "flax>=0.10.7",
     "polars",
     "open3d",
@@ -16,12 +17,11 @@ dependencies = [
     "numpy==2.1.2",
     "sam3@git+https://github.com/kumaradityag/sam3.git",
     "einops",
-    "decord",
+    "decord ; sys_platform == 'linux'",
     "pycocotools",
     "rgbd-dataset",
     "ipdb>=0.13.13",
-    "viser>=1.0.16",
-    "black>=25.12.0",
+    "semistaticsim==0.4.5" #@git+https://github.com/Velythyl/SemiStaticSim.git@package"
 ]
 requires-python = ">=3.10"
 
@@ -41,7 +41,7 @@ members = [
 
 [tool.uv.sources]
 rgbd-dataset = { workspace = true }
-concept-graphs = { workspace = true, editable = true }
+concept-graphs = { workspace = true }
 perpetua2 = { workspace = true }
 
 [dependency-groups]
