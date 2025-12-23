@@ -240,6 +240,7 @@ class QueryObjects(BaseMapEngine):
             }
         }
         """
+        # TODO: If this is not working, add Hungarian
         results: Dict[str, Dict] = {}
         pickupable_to_map: Dict[str, int] = {}
 
