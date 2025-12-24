@@ -25,7 +25,7 @@ class PerpetuaMapServer(ObjectMapServer):
         self.vector_handles: Dict[str, viser.VectorHandle] = {}
 
         # GUI
-        with self.server.gui.add_folder("Temporal Queries"):
+        with self.tab_group.add_tab("Temporal"):
             self.map_time_tracker_gui_number = self.server.gui.add_number(
                 "Map Time (hours)",
                 initial_value=0,
@@ -64,7 +64,7 @@ class PerpetuaMapServer(ObjectMapServer):
                 )
                 self.object_time_gui_button.on_click(self.on_object_time_query_submit)
             self.map_gui_reset_button = self.server.gui.add_button(
-                "Reset Edges",
+                "Reset Map",
                 icon=viser.Icon.MOUSE,
             )
             self.map_gui_reset_button.on_click(self.on_map_time_reset_click)

@@ -178,7 +178,6 @@ class PerpetuaObjectMap:
                 continue
             inferred_edges[receptacle_name].append(name)
 
-        # FIXME: if predicting, this needs to be a temporal change, not an absolute set
         self.set_edges(inferred_edges)
         self.time = timestep.item()
 

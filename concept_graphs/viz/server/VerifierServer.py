@@ -51,7 +51,7 @@ class VerifierServer(ObjectMapServer):
         self.p2p_associations_handles: Dict[str, viser.LineHandle] = {}
         self.p2r_associations_handles: Dict[str, viser.LineHandle] = {}
         # GUI
-        with self.server.gui.add_folder("Debugging"):
+        with self.tab_group.add_tab("Verifier"):
             with self.server.gui.add_folder("Structure (Receptacles)"):
                 # Group GT, Pred, and Assoc together so you can toggle them in sequence
                 self.gt_receptacle_checkbox = self.server.gui.add_checkbox(

@@ -32,62 +32,64 @@ class ObjectMapServer:
         self.clip_query: str = ""
 
         # GUI
-        with self.server.gui.add_folder("Point Cloud"):
-            self.obj_counter_gui_button = self.server.gui.add_number(
-                "# Objects",
-                initial_value=0,
-                disabled=True,
-            )
-            self.pcd_rgb_gui_button = self.server.gui.add_button(
-                "RGB",
-                icon=viser.Icon.MOUSE,
-            )
-            self.pcd_rgb_gui_button.on_click(self.on_rgb_button_click)
+        self.tab_group = self.server.gui.add_tab_group()
+        with self.tab_group.add_tab("Object Map"):
+            with self.server.gui.add_folder("Point Cloud"):
+                self.obj_counter_gui_button = self.server.gui.add_number(
+                    "# Objects",
+                    initial_value=0,
+                    disabled=True,
+                )
+                self.pcd_rgb_gui_button = self.server.gui.add_button(
+                    "RGB",
+                    icon=viser.Icon.MOUSE,
+                )
+                self.pcd_rgb_gui_button.on_click(self.on_rgb_button_click)
 
-            self.pcd_segmentation_gui_button = self.server.gui.add_button(
-                "Segmentation",
-                icon=viser.Icon.MOUSE,
-            )
-            self.pcd_segmentation_gui_button.on_click(self.on_segmentation_button_click)
+                self.pcd_segmentation_gui_button = self.server.gui.add_button(
+                    "Segmentation",
+                    icon=viser.Icon.MOUSE,
+                )
+                self.pcd_segmentation_gui_button.on_click(self.on_segmentation_button_click)
 
-            self.pcd_centroid_gui_checkbox = self.server.gui.add_checkbox(
-                "Centroid",
-                initial_value=False,
-            )
-            self.pcd_centroid_gui_checkbox.on_update(self.on_centroid_checkbox_change)
+                self.pcd_centroid_gui_checkbox = self.server.gui.add_checkbox(
+                    "Centroid",
+                    initial_value=False,
+                )
+                self.pcd_centroid_gui_checkbox.on_update(self.on_centroid_checkbox_change)
 
-            self.pcd_boxes_gui_checkbox = self.server.gui.add_checkbox(
-                "Boxes",
-                initial_value=False,
-            )
-            self.pcd_boxes_gui_checkbox.on_update(self.on_boxes_checkbox_change)
+                self.pcd_boxes_gui_checkbox = self.server.gui.add_checkbox(
+                    "Boxes",
+                    initial_value=False,
+                )
+                self.pcd_boxes_gui_checkbox.on_update(self.on_boxes_checkbox_change)
 
-            self.pcd_labels_gui_checkbox = self.server.gui.add_checkbox(
-                "Labels",
-                initial_value=False,
-            )
-            self.pcd_labels_gui_checkbox.on_update(self.on_labels_checkbox_change)
+                self.pcd_labels_gui_checkbox = self.server.gui.add_checkbox(
+                    "Labels",
+                    initial_value=False,
+                )
+                self.pcd_labels_gui_checkbox.on_update(self.on_labels_checkbox_change)
 
-            self.pcd_size_gui_slider = self.server.gui.add_slider(
-                "Point size",
-                min=0.001,
-                max=0.030,
-                step=0.001,
-                initial_value=0.010,
-                disabled=False,
-            )
-            self.pcd_size_gui_slider.on_update(self.on_point_size_change)
+                self.pcd_size_gui_slider = self.server.gui.add_slider(
+                    "Point size",
+                    min=0.001,
+                    max=0.030,
+                    step=0.001,
+                    initial_value=0.010,
+                    disabled=False,
+                )
+                self.pcd_size_gui_slider.on_update(self.on_point_size_change)
 
-        with self.server.gui.add_folder("CLIP Query"):
-            self.clip_gui_text = self.server.gui.add_text(
-                "Query",
-                initial_value="",
-            )
-            self.clip_gui_button = self.server.gui.add_button(
-                "CLIP Similarities",
-                icon=viser.Icon.MOUSE,
-            )
-            self.clip_gui_button.on_click(self.on_clip_query_submit)
+            with self.server.gui.add_folder("CLIP Query"):
+                self.clip_gui_text = self.server.gui.add_text(
+                    "Query",
+                    initial_value="",
+                )
+                self.clip_gui_button = self.server.gui.add_button(
+                    "CLIP Similarities",
+                    icon=viser.Icon.MOUSE,
+                )
+                self.clip_gui_button.on_click(self.on_clip_query_submit)
 
         self._update_server_state()
 
