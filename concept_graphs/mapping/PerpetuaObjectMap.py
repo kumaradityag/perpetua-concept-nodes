@@ -7,10 +7,13 @@ from typing import Dict, Iterable, List, Optional, Self
 import dill as pickle
 import numpy as np
 import torch
+import jax
 import jax.numpy as jnp
 
 from .Object import Object, ObjectType
 from perpetua2.utils.filter_state import Object as Estimator
+from perpetua2.utils.inference import update_object as update_estimator
+from perpetua2.data.procthor import get_data_slice
 import logging
 
 log = logging.getLogger(__name__)
@@ -34,6 +37,7 @@ class PerpetuaObjectMap:
             name for name in (receptacle_names or []) if name != "OOB_FAKE_RECEPTACLE"
         ]
         self.time = time
+        self.ininital_time = time
         self.device = device
 
         self.objects: Dict[str, Object] = {}
@@ -129,6 +133,7 @@ class PerpetuaObjectMap:
 
     def reset(self):
         self.set_edges(self.initial_edges, move_pickupables=True)
+        self.time = self.ininital_time
 
     def set_edges(self, edges: Dict[str, List[str]], move_pickupables: bool = True):
         attached = {}
@@ -241,6 +246,35 @@ class PerpetuaObjectMap:
 
         for obj in self.objects.values():
             obj.pcd_to_o3d()
+
+    def update_estimators(
+        self,
+        data_path: str,
+        load_week: bool,
+        p_m: float,
+        p_f: float,
+        key: jax.random.PRNGKey,
+        time: Optional[float] = None,
+    ):
+        if time is None:
+            time = self.time
+        # Update belief of all estimators in the map
+        data = get_data_slice(
+            folder=data_path,
+            current_time=time,
+            get_all_week=load_week,
+            noise=p_m,
+            key=key,
+        )
+        # Update all objects
+        for obj in self._pickupables.values():
+            estimator = update_estimator(
+                data,
+                obj.estimator,
+                p_m,
+                p_f,
+            )
+            obj.estimator = estimator
 
     @classmethod
     def load(cls, path: str) -> Self:

@@ -1,5 +1,9 @@
 import logging
 import torch
+import jax
+
+from perpetua2.utils.inference import multistep_update
+from perpetua2.data.procthor import get_data_slice
 
 from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
 from concept_graphs.inference.toolbox.ObjectMapToolbox import ObjectMapToolbox
@@ -13,18 +17,38 @@ class PerpetuaMapToolbox(ObjectMapToolbox):
         self,
         map_path: str,
         ft_extractor: CLIP,
+        data_path: str,
+        p_m: float,
+        p_f: float,
+        load_week: bool = False,
+        seed: int = 42,
     ):
         self.object_map: PerpetuaObjectMap = None
+        self.key = jax.random.PRNGKey(seed)
+        self.data_path = data_path  
+        self.p_m = p_m
+        self.p_f = p_f
+        self.load_week = load_week
         super().__init__(map_path, ft_extractor)
+
+    @property
+    def _estimator_kwargs(self):
+        # We always use the same jax key for reproducibility!
+        return {
+            "data_path": self.data_path, "load_week": self.load_week,
+            "p_m": self.p_m, "p_f": self.p_f, "key": self.key
+        }
 
     def load_object_map(self, map_path: str = None):
         object_map = PerpetuaObjectMap.load(map_path)
+        object_map.update_estimators(**self._estimator_kwargs)
         object_map.to(self.device)
-        object_map.downsample_objects(voxel_size=0.005)
+        object_map.downsample_objects(voxel_size=0.01)
         return object_map
 
     def update_object_map(self, object_map):
         self.object_map = object_map
+        object_map.update_estimators(**self._estimator_kwargs)
         self.object_map.downsample_objects(voxel_size=0.01)
         self.object_map.refresh_state()
         self.reset()

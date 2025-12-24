@@ -11,6 +11,7 @@ import hydra
 from omegaconf import DictConfig
 import logging
 
+from concept_graphs.utils import fetch_run_id
 from concept_graphs.mapping.ObjectMap import ObjectMap
 from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
 
@@ -58,9 +59,10 @@ def main(cfg: DictConfig):
     pickupable_map_ids, receptacle_map_ids = engine.get_map_object_ids()
     concept_nodes_map = ObjectMap.load(concept_nodes_map_path)
     current_p2r_mapping = engine.parse_assignments(results, pickupable_names)
+    map_creation_time = fetch_run_id(cfg)
 
     perpetua_map: PerpetuaObjectMap = engine.update_perpetua_map(
-        0.0,
+        map_creation_time,
         concept_nodes_map,
         pickupable_names,
         receptacle_names,

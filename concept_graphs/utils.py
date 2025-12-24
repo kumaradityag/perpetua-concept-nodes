@@ -4,11 +4,10 @@ import torch
 import numpy as np
 import random
 import logging
-from .mapping.ObjectMap import ObjectMap
-import pickle
 import re
 import open3d as o3d
 from pathlib import Path
+from omegaconf import OmegaConf
 
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -51,6 +50,15 @@ def split_camel_preserve_acronyms(name):
     s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name)
     s = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", s)
     return s.lower()
+
+
+def fetch_run_id(cfg):
+    scene = OmegaConf.select(cfg, "dataset.scene")
+    if scene:
+        run_id = int(scene.split("_")[-1])
+    else:
+        run_id = 0
+    return run_id
 
 
 def aabb_iou(c1: np.ndarray, c2: np.ndarray) -> float:

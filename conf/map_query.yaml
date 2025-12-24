@@ -4,7 +4,7 @@ defaults:
   - paths: paths
   - _self_
 
-map_path: ${output_dir}/semistaticsim_run_0_cg-detector_2025-12-20-14-16-10.420183
+map_path: ${output_dir}/semistaticsim_run_0_cg-detector_2025-12-23-17-15-31.682768
 perpetua_estimators_path: ${estimators_dir}/procthor/scene_0
 perpetua_map_path: ${data_dir}/perpetua_map
 perpetua_map_full_overwrite: true

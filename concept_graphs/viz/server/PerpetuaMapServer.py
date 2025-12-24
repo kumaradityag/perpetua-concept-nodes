@@ -140,6 +140,9 @@ class PerpetuaMapServer(ObjectMapServer):
                 self.vector_handles[f"vectors/{r_name}_{i}"] = line
 
     def display_query_object(self, name: str, color: Optional[List[int]] = None):
+        # First display everything in RGB to color previous moved objects
+        self.display_object_rgb()
+        # Get object
         obj = self.object_map.get_pickupable(name)
         # Get handles of object if they exist
         object_handle = self.object_handles.get(f"objects/{name}", None)

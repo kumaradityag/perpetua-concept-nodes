@@ -198,11 +198,14 @@ class ObjectMap:
         mask_diagonal: bool,
     ) -> Tuple[List[bool], List[int]]:
         """Compute similarities with objects from another map."""
+        # Check for empty maps
+        if not other.pcd_tensors or sum(t.numel() for t in other.pcd_tensors) == 0:
+            return [False] * len(other), np.arange(len(other)).tolist()
 
         # Identify objects in map inside current point cloud's frustrum
         other_min, other_max = compute_bounds(other.pcd_tensors)
         main_in_other = (self.vertices_tensor >= other_min) & (
-            self.vertices_tensor <= other_max
+                self.vertices_tensor <= other_max
         )
         objs_in_frustrum = (
             main_in_other.all(dim=2).any(1).nonzero(as_tuple=False).squeeze(1)
