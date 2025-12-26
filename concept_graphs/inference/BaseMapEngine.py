@@ -25,7 +25,6 @@ class BaseMapEngine:
         self,
         map_path: str,
         perpetua_estimators_path: str,
-        perpetua_map_path: str,
         perpetua_map_full_overwrite: bool,
         ft_extractor: FeatureExtractor,
         semantic_sim_metric: CosineSimilarity01,
@@ -34,8 +33,6 @@ class BaseMapEngine:
         # Paths
         self.map_path = Path(map_path)
         self.perpetua_estimators_path = Path(perpetua_estimators_path)
-        self.perpetua_map_path = Path(perpetua_map_path)
-        self.perpetua_map_path.mkdir(parents=True, exist_ok=True)
         self.perpetua_map_full_overwrite = perpetua_map_full_overwrite
 
         # Components
@@ -185,7 +182,7 @@ class BaseMapEngine:
         if "OOB_FAKE_RECEPTACLE" in receptacle_names:
             receptacle_names.remove("OOB_FAKE_RECEPTACLE")
 
-        map_file = self.perpetua_map_path / "perpetua_map.pkl"
+        map_file = self.map_path / "perpetua_map.pkl"
 
         canonical_vectors = self._build_canonical_vectors(
             concept_nodes_map,
@@ -195,7 +192,7 @@ class BaseMapEngine:
         )
 
         if map_file.exists() and not self.perpetua_map_full_overwrite:
-            perpetua_map = PerpetuaObjectMap.load(self.perpetua_map_path)
+            perpetua_map = PerpetuaObjectMap.load(map_file)
 
             for pickupable_name in pickupable_names:
                 pickupable_id = pickupable_map_ids.get(pickupable_name)
@@ -250,6 +247,5 @@ class BaseMapEngine:
             perpetua_map.set_initial_edges()
             perpetua_map.refresh_state()
 
-        # TODO: Fix the path to be in cn_output
-        perpetua_map.save(self.perpetua_map_path)
+        perpetua_map.save(self.map_path)
         return perpetua_map

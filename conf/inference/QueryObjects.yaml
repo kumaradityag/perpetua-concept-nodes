@@ -1,7 +1,6 @@
 _target_: concept_graphs.inference.MapQueryEngine.QueryObjects
 map_path: ${map_path}
 perpetua_estimators_path: ${perpetua_estimators_path}
-perpetua_map_path: ${perpetua_map_path}
 perpetua_map_full_overwrite: ${perpetua_map_full_overwrite}
 ft_extractor: ???
 semantic_sim_metric: ???
