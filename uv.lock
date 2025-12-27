@@ -1193,8 +1193,8 @@ wheels = [
 
 [package.optional-dependencies]
 cuda12 = [
-    { name = "jax-cuda12-plugin", extra = ["with-cuda"], marker = "sys_platform == 'linux'" },
-    { name = "jaxlib", marker = "sys_platform == 'linux'" },
+    { name = "jax-cuda12-plugin", extra = ["with-cuda"] },
+    { name = "jaxlib" },
 ]
 
 [[package]]
@@ -1211,7 +1211,7 @@ name = "jax-cuda12-plugin"
 version = "0.8.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "jax-cuda12-pjrt", marker = "sys_platform == 'linux'" },
+    { name = "jax-cuda12-pjrt" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/89/cb/8119088cab8d798ca4a18d1ed143be3d90057c2fa2e8dbaf3bfff779014d/jax_cuda12_plugin-0.8.1-cp312-cp312-manylinux_2_27_aarch64.whl", hash = "sha256:385001f56f852959f061ae15ad157c39cc4471c8d1d2544dfc3f805684ac2213", size = 5595076, upload-time = "2025-11-18T19:47:59.419Z" },
@@ -3468,8 +3468,7 @@ source = { editable = "rgbd_dataset" }
 dependencies = [
     { name = "flax" },
     { name = "hydra-core" },
-    { name = "jax", extra = ["cuda12"], marker = "sys_platform == 'linux'" },
-    { name = "jax-metal", marker = "sys_platform == 'darwin'" },
+    { name = "jax", extra = ["cuda12"] },
     { name = "natsort" },
     { name = "numpy" },
     { name = "open3d" },
@@ -3477,14 +3476,14 @@ dependencies = [
     { name = "polars" },
     { name = "torch" },
     { name = "torchvision" },
+    { name = "viser" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "flax", specifier = ">=0.10.7" },
     { name = "hydra-core", specifier = ">=1.3.2" },
-    { name = "jax", extras = ["cuda12"], marker = "sys_platform == 'linux'", specifier = ">=0.8.1" },
-    { name = "jax-metal", marker = "sys_platform == 'darwin'", specifier = ">=0.1.1" },
+    { name = "jax", extras = ["cuda12"], specifier = ">=0.6.2" },
     { name = "natsort" },
     { name = "numpy", specifier = "==2.1.2" },
     { name = "open3d" },
@@ -3492,6 +3491,7 @@ requires-dist = [
     { name = "polars", specifier = ">=1.34.0" },
     { name = "torch" },
     { name = "torchvision" },
+    { name = "viser", specifier = ">=1.0.16" },
 ]
 
 [[package]]
