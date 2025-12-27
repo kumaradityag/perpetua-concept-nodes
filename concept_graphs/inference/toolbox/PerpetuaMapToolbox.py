@@ -1,9 +1,8 @@
 import logging
-import torch
+from pathlib import Path
 import jax
 
-from perpetua2.utils.inference import multistep_update
-from perpetua2.data.procthor import get_data_slice
+from perpetua2.data.procthor import read_gt_scene, fetch_gt_assignment
 
 from concept_graphs.mapping.PerpetuaObjectMap import PerpetuaObjectMap
 from concept_graphs.inference.toolbox.ObjectMapToolbox import ObjectMapToolbox
@@ -26,6 +25,7 @@ class PerpetuaMapToolbox(ObjectMapToolbox):
         self.object_map: PerpetuaObjectMap = None
         self.key = jax.random.PRNGKey(seed)
         self.data_path = data_path  
+        self.gt_data = read_gt_scene(Path(data_path).parent / "groundtruth")
         self.p_m = p_m
         self.p_f = p_f
         self.load_week = load_week
@@ -55,11 +55,14 @@ class PerpetuaMapToolbox(ObjectMapToolbox):
 
     def temporal_map_query(self, query_time: float):
         self.object_map.predict(query_time)
+
         self.object_map.refresh_state()
 
     def temporal_object_query(self, object_id: str, query_time: float):
-        self.object_map.object_predict(object_id, query_time)
+        prediction = self.object_map.object_predict(object_id, query_time)
+        gt_state = fetch_gt_assignment(self.gt_data, query_time, object_id, prediction)
         self.object_map.refresh_state()
+        return prediction, gt_state
 
     def reset_temporal_edges(self):
         self.object_map.reset()

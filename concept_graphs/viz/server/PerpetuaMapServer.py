@@ -87,11 +87,11 @@ class PerpetuaMapServer(ObjectMapServer):
             self.map_query_time = None
         # Object query
         if self.object_query_time is not None and self.selected_object_id is not None:
-            self.toolbox.temporal_object_query(
+            prediction, gt_state = self.toolbox.temporal_object_query(
                 self.selected_object_id, self.object_query_time
             )
             self.display_query_object(
-                self.selected_object_id, color=np.array([255, 0, 255])
+                self.selected_object_id, np.array([255, 0, 255]), prediction, gt_state
             )
             self.object_query_time = None
             self.selected_object_id = None
@@ -139,7 +139,13 @@ class PerpetuaMapServer(ObjectMapServer):
                 )
                 self.vector_handles[f"vectors/{r_name}_{i}"] = line
 
-    def display_query_object(self, name: str, color: Optional[List[int]] = None):
+    def display_query_object(
+        self,
+        name: str,
+        color: np.ndarray,
+        prediction: Dict[str, float] = None,
+        gt_state: Dict[str, float] = None,
+    ):
         # First display everything in RGB to color previous moved objects
         self.display_object_rgb()
         # Get object
@@ -169,7 +175,7 @@ class PerpetuaMapServer(ObjectMapServer):
                 color=color,
                 point_size=self.pcd_size_gui_slider.value,
                 point_shape=self.point_shape,
-                visible=visibility
+                visible=visibility,
             )
             self.object_handles.append(obj_handle)
         # Update hitbox position
@@ -186,7 +192,7 @@ class PerpetuaMapServer(ObjectMapServer):
                 wxyz=wxyz,
                 color=(255, 255, 255),
                 opacity=0.0,
-                visible=visibility
+                visible=visibility,
             )
             self.hitbox_handles[f"hitbox/{name}"] = hitbox
         # Update centroid if visible
@@ -204,3 +210,35 @@ class PerpetuaMapServer(ObjectMapServer):
             label_handle.position = obj.centroid
             label_handle.text = name
             label_handle.visible = visibility
+
+        # Notification of prediction result
+        if gt_state is not None:
+            GREEN = [76, 175, 80]
+            RED = [255, 82, 82]
+            # If object is visible, check best hypothesis
+            gt_loc, gt_val = max(gt_state.items(), key=lambda x: x[1])
+            is_actually_present = gt_val >= 0.5
+            if visibility:
+                pred_loc, _ = max(prediction.items(), key=lambda x: x[1])
+                if gt_state.get(pred_loc, 0.0) >= 0.5:
+                    color, msg = GREEN, f"Correct: Found at {pred_loc}"
+                else:
+                    if is_actually_present:
+                        suffix = f"actually at {gt_loc}"
+                    else:
+                        suffix = "object is completely absent"
+                        
+                    color, msg = RED, f"Incorrect: Predicted {pred_loc}, but {suffix}"
+
+            else:
+                if is_actually_present:
+                    color, msg = RED, f"False Negative: Missed object at {gt_loc}"
+                else:
+                    color, msg = GREEN, "Correct: Object is truly absent"
+            client = self.server.get_clients()[0]
+            client.add_notification(
+                title="Prediction Results",
+                body=msg,
+                auto_close_seconds=5.0,
+                color=color,
+            )

@@ -217,6 +217,8 @@ class PerpetuaObjectMap:
         self.time = timestep.item()
         self._refresh_geometry_cache()
 
+        return {s:b.item() for b,s in zip(belief, pickupable.receptacles)}
+
     def update_canonical_vectors(self, canonical_vectors: Dict[str, List[np.ndarray]]):
         for receptacle_name, vectors in canonical_vectors.items():
             if receptacle_name not in self._receptacles:

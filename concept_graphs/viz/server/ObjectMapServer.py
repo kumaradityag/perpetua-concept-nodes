@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 
 from concept_graphs.viz.utils import similarities_to_rgb
 from concept_graphs.mapping.ObjectMap import ObjectMap
-from concept_graphs.mapping.Object import Object
 from concept_graphs.inference.toolbox.ObjectMapToolbox import ObjectMapToolbox
 
 import logging
