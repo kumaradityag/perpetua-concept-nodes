@@ -181,7 +181,7 @@ class PerpetuaObjectMap:
         self.set_edges(inferred_edges)
         self.time = timestep.item()
 
-    def object_predict(self, object_id: str, timestep: float, threshold: float = 0.5):
+    def object_predict(self, object_id: str, timestep: float, threshold: float = 0.5) -> Dict[str, float]:
         """Method to predict a single pickupable location at a given timestep."""
         if isinstance(timestep, float) or isinstance(timestep, int):
             timestep = jnp.array([timestep], dtype=jnp.float32)
